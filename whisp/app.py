@@ -1,3 +1,4 @@
+import math
 import queue
 import threading
 import time
@@ -12,14 +13,28 @@ from whisp.hotkey import HotkeyListener, FnHotkeyListener
 from whisp.settings import Settings
 from whisp.ui.server import start_server
 
-IDLE = "🎙️"
-RECORDING = "🔴"
-WORKING = "⏳"
+# Menu-bar animation
+IDLE_ICON = "🎙"
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+BLOCKS = "▁▂▃▄▅▆▇█"
+ANIM_INTERVAL = 0.1
+
+_STATUS = {
+    "idle": "● Ready",
+    "recording": "● Recording…",
+    "processing": "⠿ Transcribing…",
+    "nospeech": "○ No speech detected",
+    "error": "⚠ Error",
+    "paused": "‖ Paused",
+    "needsperm": "⚠ Enable Accessibility in System Settings",
+}
+# transient states auto-revert to idle after this many animation ticks
+_FLASH_TICKS = {"nospeech": 14, "error": 22}
 
 
 class WhispApp(rumps.App):
     def __init__(self):
-        super().__init__(config.APP_NAME, title=IDLE, quit_button=None)
+        super().__init__(config.APP_NAME, title=IDLE_ICON, quit_button=None)
         self.settings = Settings.load()
         self.recorder = None
         self.paused = False
@@ -28,44 +43,96 @@ class WhispApp(rumps.App):
         self._hands_free = False
         self._session = 0
         self._muted_by_us = False
+
+        # animation state (rendered by a main-thread timer; workers only set it)
+        self._anim_state = "idle"
+        self._status_detail = None
+        self._frame = 0
+        self._flash_left = 0
+
+        self._status_item = rumps.MenuItem("● Ready")   # disabled status line
+        self._pause_item = rumps.MenuItem("Pause", callback=self.toggle_pause)
         self.menu = [
+            self._status_item,
+            None,
             rumps.MenuItem("History", callback=self.open_history),
             rumps.MenuItem("Settings", callback=self.open_settings),
             None,
             rumps.MenuItem("Grant Accessibility…", callback=self.grant_accessibility),
-            rumps.MenuItem("Pause", callback=self.toggle_pause),
+            self._pause_item,
             rumps.MenuItem("Quit", callback=rumps.quit_application),
         ]
+
         self._server_port = start_server(self.settings)
-        # All recording work runs on this single worker, never on the event-tap
-        # thread — so a slow/failing mic open can never disable the global hotkey.
         self._actions = queue.Queue()
         threading.Thread(target=self._worker, daemon=True).start()
         threading.Thread(target=prewarm_microphone, daemon=True).start()
+
+        # Drive the menu-bar animation on the main run loop.
+        self._anim_timer = rumps.Timer(self._animate, ANIM_INTERVAL)
+        self._anim_timer.start()
+
         self._ensure_permission_then_listen()
 
+    # ---------------- animation (main thread) ----------------
+    def _set_state(self, state, detail=None):
+        self._status_detail = detail
+        self._frame = 0
+        self._flash_left = _FLASH_TICKS.get(state, 0)
+        self._anim_state = state
+
+    def _animate(self, _):
+        state = self._anim_state
+        if state == "recording":
+            self.title = self._equalizer()
+        elif state == "processing":
+            self.title = SPINNER[self._frame % len(SPINNER)]
+        elif state == "nospeech":
+            self.title = "◌"
+        elif state == "error":
+            self.title = "⚠️"
+        elif state == "paused":
+            self.title = "‖"
+        elif state == "needsperm":
+            self.title = "⚠️"
+        else:
+            self.title = IDLE_ICON
+
+        status = _STATUS.get(state, "● Ready")
+        if state == "error" and self._status_detail:
+            status = f"⚠ {self._status_detail}"
+        self._status_item.title = status
+
+        self._frame += 1
+        if self._flash_left:
+            self._flash_left -= 1
+            if self._flash_left == 0:
+                self._anim_state = "paused" if self.paused else "idle"
+
+    def _equalizer(self):
+        level = getattr(self.recorder, "level", 0.0) if self.recorder else 0.0
+        bars = ""
+        for i in range(3):
+            phase = (math.sin((self._frame + i * 3) * 0.7) + 1) / 2  # 0..1
+            h = 0.15 + level * (0.6 + 0.8 * phase)
+            bars += BLOCKS[max(0, min(7, int(h * 8)))]
+        return bars
+
+    # ---------------- permissions ----------------
     def _ensure_permission_then_listen(self):
         if permissions.is_trusted():
             self._start_listener()
             return
-        # Not trusted yet: show the system prompt, open the settings pane, then
-        # poll until the user flips the switch and start the hotkey automatically.
         permissions.prompt_accessibility()
         permissions.open_accessibility_settings()
-        self.title = "⚠️"
-        rumps.notification(
-            config.APP_NAME, "Turn on Whisp to enable dictation",
-            "System Settings → Privacy & Security → Accessibility → enable Whisp.",
-        )
+        self._set_state("needsperm")
         threading.Thread(target=self._poll_permission, daemon=True).start()
 
     def _poll_permission(self):
         while not permissions.is_trusted():
             time.sleep(2)
         self._start_listener()
-        self.title = IDLE
-        rumps.notification(config.APP_NAME, "Whisp is ready 🎙️",
-                           "Hold your hotkey, speak, and let go.")
+        self._set_state("idle")
 
     def _start_listener(self):
         if self._listener_started:
@@ -74,13 +141,10 @@ class WhispApp(rumps.App):
         if hk.get("mode") == "fn":
             self.listener = FnHotkeyListener(on_action=self._on_fn_action)
         else:
-            combo = hk.get("combo") or [hk.get("keyCode", 56)]   # tolerate legacy single-key
+            combo = hk.get("combo") or [hk.get("keyCode", 56)]
             self.listener = HotkeyListener(
-                combo=combo,
-                lock_keycode=hk.get("lockKeyCode"),
-                on_press=self._on_press,
-                on_release=self._on_release,
-                on_lock=self._on_lock,
+                combo=combo, lock_keycode=hk.get("lockKeyCode"),
+                on_press=self._on_press, on_release=self._on_release, on_lock=self._on_lock,
             )
         self.listener.start()
         self._listener_started = True
@@ -89,7 +153,7 @@ class WhispApp(rumps.App):
         permissions.prompt_accessibility()
         permissions.open_accessibility_settings()
 
-    # --- event-tap callbacks: do NOTHING but enqueue (must be instant) ---
+    # ---------------- event-tap callbacks: enqueue only (instant) ----------------
     def _on_press(self):
         self._actions.put("press")
 
@@ -102,7 +166,7 @@ class WhispApp(rumps.App):
     def _on_fn_action(self, action):
         self._actions.put(("fn", action))
 
-    # --- worker thread: owns all recording state and heavy work ---
+    # ---------------- worker thread ----------------
     def _worker(self):
         while True:
             action = self._actions.get()
@@ -111,8 +175,7 @@ class WhispApp(rumps.App):
             except Exception as exc:
                 self.recorder = None
                 self._hands_free = False
-                self.title = IDLE
-                rumps.notification(config.APP_NAME, "Dictation error", str(exc)[:120])
+                self._set_state("error", detail=str(exc)[:80])
 
     def _handle_action(self, action):
         if action == "press":
@@ -120,21 +183,18 @@ class WhispApp(rumps.App):
                 return
             self._start_recording()
         elif action == "release":
-            # Releasing the combo stops push-to-talk, but never interrupts hands-free.
             if self.paused or self.recorder is None or self._hands_free:
                 return
             self._stop_and_process()
         elif isinstance(action, tuple) and action[0] == "lock":
-            kind = action[1]   # "tap" or "double"
+            kind = action[1]
             if self.paused:
                 return
             if self._hands_free:
-                # Locked: any single tap (or double) of the lock key unlocks/stops.
                 self._hands_free = False
                 if self.recorder is not None:
                     self._stop_and_process()
             elif kind == "double" and self.recorder is None:
-                # Double-tap locks: start hands-free recording.
                 self._hands_free = True
                 self._start_recording()
         elif isinstance(action, tuple) and action[0] == "fn":
@@ -143,27 +203,28 @@ class WhispApp(rumps.App):
     def _handle_fn(self, cmd):
         if self.paused:
             return
-        if cmd == "rec":                 # begin tentative capture (silent)
+        if cmd == "rec":
             if self.recorder is None:
                 self._begin_capture()
-        elif cmd == "confirm":           # genuine hold -> show recording + cue
+        elif cmd == "confirm":
             self._cue("start")
-            self.title = RECORDING
-        elif cmd == "process":           # hold released -> transcribe
+            self._set_state("recording")
+        elif cmd == "process":
             self._hands_free = False
             self._stop_and_process()
-        elif cmd == "discard":           # it was a tap -> drop the capture silently
+        elif cmd == "discard":
             self._discard_capture()
-        elif cmd == "lock":              # double-tap -> hands-free recording
+        elif cmd == "lock":
             self._discard_capture()
             self._hands_free = True
             self._begin_capture()
             self._cue("start")
-            self.title = RECORDING
-        elif cmd == "unlock":            # tap while locked -> transcribe
+            self._set_state("recording")
+        elif cmd == "unlock":
             self._hands_free = False
             self._stop_and_process()
 
+    # ---------------- recording ----------------
     def _begin_capture(self):
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
@@ -175,58 +236,54 @@ class WhispApp(rumps.App):
                 recorder.stop()
             except Exception:
                 pass
-        self.title = IDLE
+        self._set_state("idle")
 
     def _cue(self, name):
         if self.settings.get("sounds_enabled", True):
             sounds.play(name)
 
     def _start_recording(self):
-        # Keep this instant: cue + recorder start only. No sleeps, no osascript.
         self._session += 1
         self._cue("start")
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
-        self.title = RECORDING
+        self._set_state("recording")
         if self.settings.get("mute_while_recording", False):
             sid = self._session
             threading.Thread(target=self._delayed_mute, args=(sid,), daemon=True).start()
 
     def _delayed_mute(self, sid):
-        # Mute slightly after start (off the hot path) so the start cue is audible
-        # and the keypress feels instant. Guarded so a finished session never sticks.
         time.sleep(0.25)
         if sid == self._session and self.recorder is not None and not sysaudio.is_output_muted():
             sysaudio.mute_output()
             self._muted_by_us = True
 
     def _stop_and_process(self):
-        self._session += 1                      # invalidate any pending delayed mute
+        self._session += 1
         recorder, self.recorder = self.recorder, None
-        self._cue("stop")                       # immediate "you released" feedback
-        self.title = WORKING
+        self._cue("stop")
+        self._set_state("processing")
         if getattr(self, "_muted_by_us", False):
             sysaudio.unmute_output()
             self._muted_by_us = False
         entry = None
         try:
             wav_path, duration = recorder.stop()
-            if is_silent(wav_path):
-                entry = None   # held the key but didn't speak -> skip (no hallucination)
-            else:
+            if not is_silent(wav_path):
                 audio_url = archive_recording(wav_path)
                 pipeline = build_pipeline(Settings.load())
                 entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
-        except Exception as exc:  # surface, never crash the menubar
-            rumps.notification(config.APP_NAME, "Dictation failed", str(exc)[:120])
-        finally:
-            self.title = IDLE
+        except Exception as exc:
+            self._set_state("error", detail=str(exc)[:80])
+            return
         if entry is not None:
             self._cue("done")
+            self._set_state("idle")
         else:
             self._cue("empty")
-            rumps.notification(config.APP_NAME, "No speech detected", "Nothing was transcribed.")
+            self._set_state("nospeech")   # shown in the menu bar, no popup
 
+    # ---------------- menu ----------------
     def open_history(self, _):
         webbrowser.open(f"http://127.0.0.1:{self._server_port}/")
 
@@ -236,7 +293,7 @@ class WhispApp(rumps.App):
     def toggle_pause(self, item):
         self.paused = not self.paused
         item.title = "Resume" if self.paused else "Pause"
-        self.title = "⏸️" if self.paused else IDLE
+        self._set_state("paused" if self.paused else "idle")
 
 
 def main():

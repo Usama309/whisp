@@ -4,6 +4,7 @@ import time
 import wave
 from urllib.parse import quote
 
+import numpy as np
 import sounddevice as sd
 
 from whisp import config
@@ -54,6 +55,7 @@ class Recorder:
         self._stream = None
         self._frames = []
         self._start_time = None
+        self.level = 0.0   # live input level 0..1 for the menu-bar VU meter
 
     def start(self):
         self._frames = []
@@ -61,6 +63,11 @@ class Recorder:
 
         def callback(indata, frames, time_info, status):
             self._frames.append(indata.copy())
+            try:
+                rms = float(np.sqrt(np.mean(indata.astype(np.float64) ** 2)))
+                self.level = min(1.0, rms / 8000.0)
+            except Exception:
+                pass
 
         self._stream = sd.InputStream(
             samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
