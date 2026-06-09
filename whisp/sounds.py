@@ -4,6 +4,7 @@ import subprocess
 
 _SOUNDS = {
     "start": "/System/Library/Sounds/Pop.aiff",
+    "stop": "/System/Library/Sounds/Tink.aiff",
     "done": "/System/Library/Sounds/Glass.aiff",
     "empty": "/System/Library/Sounds/Funk.aiff",
 }

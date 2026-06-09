@@ -21,6 +21,14 @@ def test_local_fallback_applies_custom_dictionary():
     assert "Groq" in out
 
 
+def test_local_fallback_handles_spoken_formatting_commands():
+    out = local_fallback("buy milk new line buy eggs new paragraph call mom")
+    lines = out.split("\n")
+    assert "Buy milk" in lines[0]
+    assert any("buy eggs" in ln.lower() for ln in lines)
+    assert "\n\n" in out  # new paragraph produced a blank line
+
+
 def test_clean_uses_groq_when_key_and_online(monkeypatch):
     captured = {}
 

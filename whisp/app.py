@@ -26,6 +26,8 @@ class WhispApp(rumps.App):
         self.listener = None
         self._listener_started = False
         self._hands_free = False
+        self._session = 0
+        self._muted_by_us = False
         self.menu = [
             rumps.MenuItem("History", callback=self.open_history),
             rumps.MenuItem("Settings", callback=self.open_settings),
@@ -131,19 +133,29 @@ class WhispApp(rumps.App):
             sounds.play(name)
 
     def _start_recording(self):
+        # Keep this instant: cue + recorder start only. No sleeps, no osascript.
+        self._session += 1
         self._cue("start")
-        time.sleep(0.15)  # let the start cue play (and finish) before muting/recording
-        self._muted_by_us = False
-        if self.settings.get("mute_while_recording", True) and not sysaudio.is_output_muted():
-            sysaudio.mute_output()
-            self._muted_by_us = True
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
         self.title = RECORDING
+        if self.settings.get("mute_while_recording", False):
+            sid = self._session
+            threading.Thread(target=self._delayed_mute, args=(sid,), daemon=True).start()
+
+    def _delayed_mute(self, sid):
+        # Mute slightly after start (off the hot path) so the start cue is audible
+        # and the keypress feels instant. Guarded so a finished session never sticks.
+        time.sleep(0.25)
+        if sid == self._session and self.recorder is not None and not sysaudio.is_output_muted():
+            sysaudio.mute_output()
+            self._muted_by_us = True
 
     def _stop_and_process(self):
-        self.title = WORKING
+        self._session += 1                      # invalidate any pending delayed mute
         recorder, self.recorder = self.recorder, None
+        self._cue("stop")                       # immediate "you released" feedback
+        self.title = WORKING
         if getattr(self, "_muted_by_us", False):
             sysaudio.unmute_output()
             self._muted_by_us = False

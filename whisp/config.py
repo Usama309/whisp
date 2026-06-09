@@ -52,7 +52,7 @@ DEFAULT_SETTINGS = {
     "language": "en",
     "press_enter": False,
     "cleanup_enabled": True,
-    "mute_while_recording": True,
+    "mute_while_recording": False,
     "sounds_enabled": True,
     "tones": {
         "email": "Professional, complete sentences, polite sign-offs.",
