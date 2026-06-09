@@ -1,9 +1,10 @@
 import threading
+import time
 import webbrowser
 
 import rumps
 
-from whisp import config
+from whisp import config, permissions
 from whisp.audio import Recorder, archive_recording
 from whisp.factory import build_pipeline
 from whisp.hotkey import HotkeyListener
@@ -21,14 +22,45 @@ class WhispApp(rumps.App):
         self.settings = Settings.load()
         self.recorder = None
         self.paused = False
+        self.listener = None
+        self._listener_started = False
         self.menu = [
             rumps.MenuItem("History", callback=self.open_history),
             rumps.MenuItem("Settings", callback=self.open_settings),
             None,
+            rumps.MenuItem("Grant Accessibility…", callback=self.grant_accessibility),
             rumps.MenuItem("Pause", callback=self.toggle_pause),
             rumps.MenuItem("Quit", callback=rumps.quit_application),
         ]
         self._server_port = start_server(self.settings)
+        self._ensure_permission_then_listen()
+
+    def _ensure_permission_then_listen(self):
+        if permissions.is_trusted():
+            self._start_listener()
+            return
+        # Not trusted yet: show the system prompt, open the settings pane, then
+        # poll until the user flips the switch and start the hotkey automatically.
+        permissions.prompt_accessibility()
+        permissions.open_accessibility_settings()
+        self.title = "⚠️"
+        rumps.notification(
+            config.APP_NAME, "Turn on Whisp to enable dictation",
+            "System Settings → Privacy & Security → Accessibility → enable Whisp.",
+        )
+        threading.Thread(target=self._poll_permission, daemon=True).start()
+
+    def _poll_permission(self):
+        while not permissions.is_trusted():
+            time.sleep(2)
+        self._start_listener()
+        self.title = IDLE
+        rumps.notification(config.APP_NAME, "Whisp is ready 🎙️",
+                           "Hold your hotkey, speak, and let go.")
+
+    def _start_listener(self):
+        if self._listener_started:
+            return
         hk = self.settings.get("hotkey", config.DEFAULT_HOTKEY)
         self.listener = HotkeyListener(
             keycode=hk.get("keyCode", 63),
@@ -37,6 +69,11 @@ class WhispApp(rumps.App):
             on_release=self._on_release,
         )
         self.listener.start()
+        self._listener_started = True
+
+    def grant_accessibility(self, _):
+        permissions.prompt_accessibility()
+        permissions.open_accessibility_settings()
 
     def _on_press(self):
         if self.paused:
