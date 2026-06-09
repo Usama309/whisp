@@ -24,6 +24,7 @@ class WhispApp(rumps.App):
         self.paused = False
         self.listener = None
         self._listener_started = False
+        self._hands_free = False
         self.menu = [
             rumps.MenuItem("History", callback=self.open_history),
             rumps.MenuItem("Settings", callback=self.open_settings),
@@ -62,11 +63,13 @@ class WhispApp(rumps.App):
         if self._listener_started:
             return
         hk = self.settings.get("hotkey", config.DEFAULT_HOTKEY)
+        combo = hk.get("combo") or [hk.get("keyCode", 56)]   # tolerate legacy single-key
         self.listener = HotkeyListener(
-            keycode=hk.get("keyCode", 63),
-            modifier_only=hk.get("isModifierOnly", True),
+            combo=combo,
+            lock_keycode=hk.get("lockKeyCode"),
             on_press=self._on_press,
             on_release=self._on_release,
+            on_toggle_lock=self._on_toggle_lock,
         )
         self.listener.start()
         self._listener_started = True
@@ -75,19 +78,36 @@ class WhispApp(rumps.App):
         permissions.prompt_accessibility()
         permissions.open_accessibility_settings()
 
-    def _on_press(self):
-        if self.paused:
-            return
+    def _start_recording(self):
         self.title = RECORDING
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
 
-    def _on_release(self):
-        if self.paused or not self.recorder:
-            return
+    def _stop_and_process(self):
         self.title = WORKING
         recorder, self.recorder = self.recorder, None
         threading.Thread(target=self._process, args=(recorder,), daemon=True).start()
+
+    def _on_press(self):
+        if self.paused or self.recorder is not None:
+            return
+        self._start_recording()
+
+    def _on_release(self):
+        # Releasing the combo stops push-to-talk, but never interrupts hands-free.
+        if self.paused or self.recorder is None or self._hands_free:
+            return
+        self._stop_and_process()
+
+    def _on_toggle_lock(self):
+        if self.paused:
+            return
+        if self.recorder is None:
+            self._hands_free = True
+            self._start_recording()
+        else:
+            self._hands_free = False
+            self._stop_and_process()
 
     def _process(self, recorder):
         try:

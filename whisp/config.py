@@ -35,8 +35,14 @@ GROQ_CHAT_URL = f"{GROQ_BASE}/chat/completions"
 GROQ_STT_MODEL = "whisper-large-v3"
 GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
 
-# Default hotkey: Fn (keyCode 63), modifier-only hold. Fallback: Right Command (keyCode 54).
-DEFAULT_HOTKEY = {"keyCode": 63, "keyName": "Fn", "isModifierOnly": True}
+# Default hotkey: hold Left Shift + Left Control to dictate; double-tap Left Shift
+# to lock (hands-free). Key codes: Left Shift = 56, Left Control = 59.
+DEFAULT_HOTKEY = {
+    "combo": [56, 59],
+    "comboNames": ["Left Shift", "Left Control"],
+    "lockKeyCode": 56,
+    "lockKeyName": "Left Shift",
+}
 
 DEFAULT_SETTINGS = {
     "groq_api_key": "",
