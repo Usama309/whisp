@@ -19,6 +19,8 @@ pyinstaller --noconfirm --windowed --name "Whisp" \
   --add-binary "packaging/assets/libggml-base.0.dylib:." \
   --add-binary "packaging/assets/libggml-cpu.so:." \
   --add-binary "packaging/assets/libggml-blas.so:." \
+  --paths . \
+  --collect-submodules whisp \
   --hidden-import rumps \
   --collect-all sounddevice \
   packaging/launcher.py
@@ -35,12 +37,19 @@ PLIST="dist/Whisp.app/Contents/Info.plist"
 codesign --force --deep --sign - \
   --entitlements packaging/Whisp.entitlements dist/Whisp.app
 
-# Build the DMG
+# Build the DMG. create-dmg gives a pretty layout but needs a GUI session;
+# fall back to a hand-staged hdiutil image (with an Applications shortcut) headless.
 rm -f dist/Whisp.dmg
-create-dmg --volname "Whisp" --app-drop-link 480 180 \
-  --window-size 720 400 --icon "Whisp.app" 200 180 \
-  dist/Whisp.dmg dist/Whisp.app 2>/dev/null \
-  || hdiutil create -volname "Whisp" -srcfolder dist/Whisp.app -ov -format UDZO dist/Whisp.dmg
+if ! create-dmg --volname "Whisp" --app-drop-link 480 180 \
+      --window-size 720 400 --icon "Whisp.app" 200 180 \
+      dist/Whisp.dmg dist/Whisp.app 2>/dev/null; then
+  rm -rf dist/dmgroot
+  mkdir -p dist/dmgroot
+  cp -R dist/Whisp.app dist/dmgroot/
+  ln -s /Applications dist/dmgroot/Applications
+  hdiutil create -volname "Whisp" -srcfolder dist/dmgroot -ov -format UDZO dist/Whisp.dmg
+  rm -rf dist/dmgroot
+fi
 
 echo "Built: dist/Whisp.dmg"
 ls -lh dist/Whisp.dmg
