@@ -1,6 +1,8 @@
 import os
 import subprocess
+import time
 
+from whisp.logs import log
 from whisp.transcribe.base import TranscriptionResult
 
 
@@ -24,8 +26,10 @@ class LocalTranscriber:
             "-nt",          # no timestamps
             "-np",          # no progress prints
         ]
+        t = time.time()
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if proc.returncode != 0:
             raise RuntimeError(f"whisper-cli failed: {proc.stderr[:200]}")
         text = " ".join(line.strip() for line in proc.stdout.splitlines() if line.strip())
+        log(f"STT  engine=local  model={os.path.basename(self._model)}  secs={time.time() - t:.2f}")
         return TranscriptionResult(text=text.strip(), engine="local")

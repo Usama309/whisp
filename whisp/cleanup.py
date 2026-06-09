@@ -1,7 +1,9 @@
 import re
+import time
 
-from whisp import groq_client
+from whisp import config, groq_client
 from whisp.context import style_key_for_app
+from whisp.logs import log
 
 _FILLERS = {"um", "uh", "erm", "uhh", "umm", "hmm"}
 _FILLER_PHRASES = ["you know", "i mean", "sort of", "kind of"]
@@ -85,8 +87,13 @@ class CleanupService:
             system = build_system_prompt(tone, app_name)
             for attempt in range(2):   # retry once before falling back to local
                 try:
+                    t = time.time()
                     out = groq_client.chat(self._api_key, system, raw_text)
+                    log(f"CLEANUP  engine=groq  model={config.GROQ_CHAT_MODEL}  "
+                        f"secs={time.time() - t:.2f}")
                     return _apply_dictionary(out, self._dictionary)
-                except Exception:
+                except Exception as exc:
+                    log(f"CLEANUP  groq attempt {attempt + 1} failed: {str(exc)[:120]}")
                     continue
+        log("CLEANUP  engine=local  (regex fallback — no key/offline/groq failed)")
         return local_fallback(raw_text, self._dictionary)

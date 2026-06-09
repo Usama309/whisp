@@ -1,4 +1,5 @@
 from whisp.transcribe.base import strip_artifacts, is_hallucination
+from whisp.logs import log
 
 
 class DictationPipeline:
@@ -23,6 +24,8 @@ class DictationPipeline:
         if not cleaned:
             return None
         self._inserter(cleaned, self._press_enter)
+        log(f"DICTATION  app='{app_name}'  stt={result.engine}  "
+            f"dur={duration:.1f}s  raw='{raw[:150]}'  =>  cleaned='{cleaned[:150]}'")
         return self._history.add(
             text=cleaned, raw_text=raw, duration=duration,
             audio_url=audio_url, app_context=app_name,

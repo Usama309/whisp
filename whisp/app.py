@@ -9,7 +9,10 @@ import rumps
 from whisp import config, media, permissions, sounds, sysaudio
 from whisp.audio import Recorder, archive_recording, prewarm_microphone, is_silent
 from whisp.factory import build_pipeline
+from whisp.history import HistoryStore
 from whisp.hotkey import HotkeyListener, FnHotkeyListener
+from whisp.inserter import copy_to_clipboard
+from whisp.logs import log_path
 from whisp.settings import Settings
 from whisp.ui.server import start_server
 
@@ -56,10 +59,12 @@ class WhispApp(rumps.App):
         self.menu = [
             self._status_item,
             None,
+            rumps.MenuItem("Copy Last Transcription", callback=self.copy_last),
             rumps.MenuItem("History", callback=self.open_history),
             rumps.MenuItem("Settings", callback=self.open_settings),
             None,
             rumps.MenuItem("Grant Accessibility…", callback=self.grant_accessibility),
+            rumps.MenuItem("Open Log", callback=self.open_log),
             self._pause_item,
             rumps.MenuItem("Quit", callback=rumps.quit_application),
         ]
@@ -301,6 +306,17 @@ class WhispApp(rumps.App):
             self._set_state("nospeech")   # shown in the menu bar, no popup
 
     # ---------------- menu ----------------
+    def copy_last(self, _):
+        entries = HistoryStore().list()
+        if entries:
+            copy_to_clipboard(entries[0].text)
+            self._set_state("idle")
+            self._status_item.title = "● Copied last transcription"
+
+    def open_log(self, _):
+        import subprocess
+        subprocess.run(["open", "-R", str(log_path())], check=False)
+
     def open_history(self, _):
         webbrowser.open(f"http://127.0.0.1:{self._server_port}/")
 

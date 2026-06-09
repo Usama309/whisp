@@ -34,6 +34,11 @@ def _key(keycode, command=False):
     CGEventPost(kCGHIDEventTap, up)
 
 
+def copy_to_clipboard(text: str):
+    if text:
+        _set_clipboard(text)
+
+
 def paste_text(text: str, press_enter: bool = False):
     if not text:
         return
