@@ -1,4 +1,17 @@
-from whisp.transcribe.base import strip_artifacts
+from whisp.transcribe.base import strip_artifacts, is_hallucination
+
+
+def test_detects_whisper_hallucinations():
+    assert is_hallucination("Subtitles by the Amara.org community")
+    assert is_hallucination("Thanks for watching!")
+    assert is_hallucination("Thank you for watching")
+    assert is_hallucination("subtitles by someone")
+
+
+def test_real_speech_is_not_hallucination():
+    assert not is_hallucination("Thank you for the update, let's ship it.")
+    assert not is_hallucination("buy milk and eggs")
+    assert not is_hallucination("")
 
 
 def test_strips_blank_audio_marker():

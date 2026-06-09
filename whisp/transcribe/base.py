@@ -21,3 +21,24 @@ _ARTIFACT = re.compile(
 def strip_artifacts(text: str) -> str:
     cleaned = _ARTIFACT.sub("", text or "")
     return re.sub(r"\s+", " ", cleaned).strip()
+
+
+# Phrases Whisper hallucinates on silent/near-silent audio (learned from subtitle
+# training data). These are never legitimately dictated, so a transcript that is
+# ONLY one of these is treated as empty.
+_HALLUCINATION_MARKERS = (
+    "amara.org",
+    "subtitles by",
+    "thanks for watching",
+    "thank you for watching",
+    "subscribe to my channel",
+    "transcription by",
+    "transcribed by",
+)
+
+
+def is_hallucination(text: str) -> bool:
+    t = (text or "").strip().lower().strip(".!?,… ")
+    if not t:
+        return False
+    return any(marker in t for marker in _HALLUCINATION_MARKERS)

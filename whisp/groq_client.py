@@ -10,7 +10,7 @@ class GroqError(Exception):
 def transcribe(api_key: str, wav_path: str, language: str = "en") -> str:
     with open(wav_path, "rb") as f:
         files = {"file": (wav_path, f, "audio/wav")}
-        data = {"model": config.GROQ_STT_MODEL, "response_format": "json"}
+        data = {"model": config.GROQ_STT_MODEL, "response_format": "json", "temperature": "0"}
         if language:
             data["language"] = language
         resp = requests.post(

@@ -1,4 +1,4 @@
-from whisp.transcribe.base import strip_artifacts
+from whisp.transcribe.base import strip_artifacts, is_hallucination
 
 
 class DictationPipeline:
@@ -16,7 +16,7 @@ class DictationPipeline:
     def run(self, wav_path: str, duration: float, audio_url: str):
         result = self._transcriber.transcribe(wav_path)
         raw = strip_artifacts((result.text or "").strip())
-        if not raw:
+        if not raw or is_hallucination(raw):
             return None
         app_name = self._frontmost_app()
         cleaned = (self._cleanup(raw, app_name) or "").strip()

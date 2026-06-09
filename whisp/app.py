@@ -6,7 +6,7 @@ import webbrowser
 import rumps
 
 from whisp import config, permissions, sounds, sysaudio
-from whisp.audio import Recorder, archive_recording, prewarm_microphone
+from whisp.audio import Recorder, archive_recording, prewarm_microphone, is_silent
 from whisp.factory import build_pipeline
 from whisp.hotkey import HotkeyListener, FnHotkeyListener
 from whisp.settings import Settings
@@ -211,9 +211,12 @@ class WhispApp(rumps.App):
         entry = None
         try:
             wav_path, duration = recorder.stop()
-            audio_url = archive_recording(wav_path)
-            pipeline = build_pipeline(Settings.load())
-            entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
+            if is_silent(wav_path):
+                entry = None   # held the key but didn't speak -> skip (no hallucination)
+            else:
+                audio_url = archive_recording(wav_path)
+                pipeline = build_pipeline(Settings.load())
+                entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
         except Exception as exc:  # surface, never crash the menubar
             rumps.notification(config.APP_NAME, "Dictation failed", str(exc)[:120])
         finally:

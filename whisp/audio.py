@@ -12,6 +12,28 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 
 
+def rms_level(wav_path: str) -> float:
+    """Root-mean-square amplitude of a 16-bit mono WAV (0..32768). 0.0 on error."""
+    import numpy as np
+    try:
+        with wave.open(wav_path, "rb") as wf:
+            frames = wf.readframes(wf.getnframes())
+        if not frames:
+            return 0.0
+        samples = np.frombuffer(frames, dtype=np.int16).astype(np.float64)
+        if samples.size == 0:
+            return 0.0
+        return float(np.sqrt(np.mean(samples ** 2)))
+    except Exception:
+        return 0.0
+
+
+def is_silent(wav_path: str, threshold: float = 200.0) -> bool:
+    """True when the recording is essentially silence/noise (no real speech).
+    Prevents Whisper from hallucinating phantom text on empty audio."""
+    return rms_level(wav_path) < threshold
+
+
 def prewarm_microphone() -> None:
     """Briefly open and close an input stream to trigger the macOS mic prompt
     early, so the first real dictation doesn't stall on a permission dialog."""
