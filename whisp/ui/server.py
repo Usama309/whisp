@@ -36,7 +36,7 @@ def create_app(settings: Settings) -> Flask:
         path = _audio_path(entry.audio_url)
         if not path or not os.path.exists(path):
             abort(404)
-        return send_file(path, mimetype="audio/ogg")
+        return send_file(path, mimetype="audio/wav")
 
     @app.route("/")
     def history():

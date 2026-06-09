@@ -1,7 +1,8 @@
-import subprocess
+import shutil
 import tempfile
 import time
 import wave
+from urllib.parse import quote
 
 import sounddevice as sd
 
@@ -49,16 +50,16 @@ class Recorder:
         return wav_path, duration
 
 
-def archive_as_opus(wav_path: str) -> str:
-    """Transcode wav -> opus in the Recordings dir; returns a file:// URL. Best-effort."""
-    from urllib.parse import quote
+def archive_recording(wav_path: str) -> str:
+    """Copy the recording WAV into the Recordings dir; returns a file:// URL.
+
+    WAV is kept (rather than transcoding to opus) so playback needs no external
+    binary and works natively in the history page. Best-effort; returns "" on error.
+    """
     ts = time.strftime("%Y-%m-%dT%H-%M-%S")
-    out = config.recordings_dir() / f"recording_{ts}.opus"
+    out = config.recordings_dir() / f"recording_{ts}.wav"
     try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", wav_path, "-c:a", "libopus", "-b:a", "24k", str(out)],
-            capture_output=True, timeout=60, check=True,
-        )
+        shutil.copyfile(wav_path, out)
         return "file://" + quote(str(out))
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except OSError:
         return ""

@@ -4,7 +4,7 @@ import webbrowser
 import rumps
 
 from whisp import config
-from whisp.audio import Recorder, archive_as_opus
+from whisp.audio import Recorder, archive_recording
 from whisp.factory import build_pipeline
 from whisp.hotkey import HotkeyListener
 from whisp.settings import Settings
@@ -55,7 +55,7 @@ class WhispApp(rumps.App):
     def _process(self, recorder):
         try:
             wav_path, duration = recorder.stop()
-            audio_url = archive_as_opus(wav_path)
+            audio_url = archive_recording(wav_path)
             pipeline = build_pipeline(Settings.load())
             pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
         except Exception as exc:  # surface, never crash the menubar
