@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Whisp · History</title>
+<link rel="stylesheet" href="/static/app.css"></head>
+<body>
+<header><h1>🎙️ Whisp History</h1>
+  <nav><a href="/">History</a> · <a href="/settings">Settings</a></nav>
+  <form method="get" action="/"><input name="q" value="{{ q }}" placeholder="Search transcripts…"><button>Search</button></form>
+</header>
+<main>
+{% for e in entries %}
+  <article class="entry{% if e.is_flagged %} flagged{% endif %}" data-id="{{ e.id }}">
+    <p class="text">{{ e.text }}</p>
+    <p class="meta"><span class="when" data-ts="{{ e.unix_date }}"></span> · {{ e.app_context or "—" }} · {{ e.duration }}s</p>
+    {% if e.has_audio %}<audio controls preload="none" src="/audio/{{ e.id }}"></audio>{% endif %}
+    <div class="actions">
+      <button onclick="copyText(this)">Copy</button>
+      <button onclick="flagEntry('{{ e.id }}')">{% if e.is_flagged %}Unflag{% else %}Flag{% endif %}</button>
+      <button onclick="deleteEntry('{{ e.id }}')">Delete</button>
+    </div>
+  </article>
+{% else %}
+  <p class="empty">No transcripts yet. Hold your hotkey and speak.</p>
+{% endfor %}
+</main>
+<script>
+document.querySelectorAll('.when').forEach(el=>{
+  const ts=parseFloat(el.dataset.ts);
+  if(ts>0){el.textContent=new Date(ts*1000).toLocaleString();}
+});
+function copyText(btn){navigator.clipboard.writeText(btn.closest('.entry').querySelector('.text').textContent);btn.textContent='Copied';}
+function flagEntry(id){const flagged=event.target.textContent==='Flag';fetch(`/api/transcript/${id}/flag`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flagged})}).then(()=>location.reload());}
+function deleteEntry(id){if(confirm('Delete this transcript?'))fetch(`/api/transcript/${id}/delete`,{method:'POST'}).then(()=>location.reload());}
+</script>
+</body></html>
