@@ -8,35 +8,39 @@ def tracker():
 
 def test_holding_combo_fires_press_then_release():
     t = tracker()
-    assert t.on_flags_changed(LEFT_SHIFT, now=1.0) == []        # shift down
-    assert t.on_flags_changed(LEFT_CONTROL, now=1.05) == ["press"]  # control down -> combo
-    assert t.on_flags_changed(LEFT_CONTROL, now=1.5) == ["release"]  # control up -> broken
-    # lifting the remaining shift produces nothing
-    assert t.on_flags_changed(LEFT_SHIFT, now=1.6) == []
+    # shift down alone registers a lock "tap" (ignored by the app unless locked)
+    assert t.on_flags_changed(LEFT_SHIFT, now=1.0) == ["tap"]
+    assert t.on_flags_changed(LEFT_CONTROL, now=1.05) == ["press"]   # combo complete
+    assert t.on_flags_changed(LEFT_CONTROL, now=1.5) == ["release"]  # combo broken
+    assert t.on_flags_changed(LEFT_SHIFT, now=1.6) == []             # lifting shift
 
 
-def test_double_tap_shift_alone_locks():
+def test_double_tap_shift_alone_emits_double():
     t = tracker()
-    # tap 1: down then up
-    assert t.on_flags_changed(LEFT_SHIFT, now=1.0) == []
-    assert t.on_flags_changed(LEFT_SHIFT, now=1.05) == []
-    # tap 2 within window -> lock
-    assert t.on_flags_changed(LEFT_SHIFT, now=1.2) == ["lock"]
+    assert t.on_flags_changed(LEFT_SHIFT, now=1.0) == ["tap"]   # first tap down
+    assert t.on_flags_changed(LEFT_SHIFT, now=1.05) == []       # first tap up
+    assert t.on_flags_changed(LEFT_SHIFT, now=1.2) == ["double"]  # second tap within window
 
 
-def test_holding_combo_does_not_lock():
+def test_single_tap_emits_tap_for_unlock():
     t = tracker()
-    t.on_flags_changed(LEFT_SHIFT, now=1.0)      # shift down
-    t.on_flags_changed(LEFT_CONTROL, now=1.05)   # control down (combo)
+    # a lone, isolated shift tap emits "tap" (the app maps this to unlock when locked)
+    assert t.on_flags_changed(LEFT_SHIFT, now=5.0) == ["tap"]
+
+
+def test_holding_combo_does_not_double():
+    t = tracker()
+    t.on_flags_changed(LEFT_SHIFT, now=1.0)      # shift down -> tap
+    t.on_flags_changed(LEFT_CONTROL, now=1.05)   # control cancels pending tap
     t.on_flags_changed(LEFT_CONTROL, now=1.5)    # control up
     t.on_flags_changed(LEFT_SHIFT, now=1.55)     # shift up
-    # immediately start another push-to-talk; control cancels any pending lock
-    assert "lock" not in t.on_flags_changed(LEFT_SHIFT, now=1.7)
+    # immediately start another push-to-talk; must NOT be read as a double-tap
+    assert t.on_flags_changed(LEFT_SHIFT, now=1.7) == ["tap"]
     assert t.on_flags_changed(LEFT_CONTROL, now=1.72) == ["press"]
 
 
-def test_two_shift_taps_too_far_apart_do_not_lock():
+def test_two_shift_taps_too_far_apart_do_not_double():
     t = tracker()
     t.on_flags_changed(LEFT_SHIFT, now=1.0)
     t.on_flags_changed(LEFT_SHIFT, now=1.05)
-    assert t.on_flags_changed(LEFT_SHIFT, now=2.0) == []  # > 0.4s gap
+    assert t.on_flags_changed(LEFT_SHIFT, now=2.0) == ["tap"]  # > 0.4s gap, not a double

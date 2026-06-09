@@ -77,7 +77,7 @@ class WhispApp(rumps.App):
             lock_keycode=hk.get("lockKeyCode"),
             on_press=self._on_press,
             on_release=self._on_release,
-            on_toggle_lock=self._on_toggle_lock,
+            on_lock=self._on_lock,
         )
         self.listener.start()
         self._listener_started = True
@@ -93,8 +93,8 @@ class WhispApp(rumps.App):
     def _on_release(self):
         self._actions.put("release")
 
-    def _on_toggle_lock(self):
-        self._actions.put("toggle")
+    def _on_lock(self, kind):
+        self._actions.put(("lock", kind))
 
     # --- worker thread: owns all recording state and heavy work ---
     def _worker(self):
@@ -118,15 +118,19 @@ class WhispApp(rumps.App):
             if self.paused or self.recorder is None or self._hands_free:
                 return
             self._stop_and_process()
-        elif action == "toggle":
+        elif isinstance(action, tuple) and action[0] == "lock":
+            kind = action[1]   # "tap" or "double"
             if self.paused:
                 return
-            if self.recorder is None:
+            if self._hands_free:
+                # Locked: any single tap (or double) of the lock key unlocks/stops.
+                self._hands_free = False
+                if self.recorder is not None:
+                    self._stop_and_process()
+            elif kind == "double" and self.recorder is None:
+                # Double-tap locks: start hands-free recording.
                 self._hands_free = True
                 self._start_recording()
-            else:
-                self._hands_free = False
-                self._stop_and_process()
 
     def _cue(self, name):
         if self.settings.get("sounds_enabled", True):

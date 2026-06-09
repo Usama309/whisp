@@ -60,14 +60,17 @@ class ComboTracker:
         if going_down and keycode in other_combo:
             self.last_lock_tap = None
 
-        # Double-tap the lock key *alone* (no other combo key held) toggles lock.
+        # Lock-key presses *alone* (no other combo key held) emit "tap" for a
+        # single press and "double" for the second of a double-tap. The app uses
+        # "double" to lock (start hands-free) and any tap to unlock (stop).
         if (going_down and keycode == self.lock_keycode
                 and not (other_combo & self.down)):
             if self.last_lock_tap is not None and (now - self.last_lock_tap) <= self.double_tap_seconds:
                 self.last_lock_tap = None
-                events.append("lock")
+                events.append("double")
             else:
                 self.last_lock_tap = now
+                events.append("tap")
 
         combo_held = self.combo.issubset(self.down)
         if combo_held and not self.active:
@@ -85,11 +88,11 @@ class HotkeyListener:
     """
 
     def __init__(self, combo, on_press, on_release,
-                 lock_keycode=None, on_toggle_lock=None, double_tap_seconds=0.4):
+                 lock_keycode=None, on_lock=None, double_tap_seconds=0.4):
         self._tracker = ComboTracker(combo, lock_keycode, double_tap_seconds)
         self._on_press = on_press
         self._on_release = on_release
-        self._on_toggle_lock = on_toggle_lock
+        self._on_lock = on_lock          # callable(kind) where kind is "tap"/"double"
         self._tap = None
         self._thread = None
 
@@ -98,8 +101,8 @@ class HotkeyListener:
             self._on_press()
         elif event == "release":
             self._on_release()
-        elif event == "lock" and self._on_toggle_lock:
-            self._on_toggle_lock()
+        elif event in ("tap", "double") and self._on_lock:
+            self._on_lock(event)
 
     def _handle(self, proxy, etype, event, refcon):
         # This runs on the event-tap thread. It must NEVER block or raise, or
