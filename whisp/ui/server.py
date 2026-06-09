@@ -16,8 +16,16 @@ def _audio_path(audio_url: str) -> str:
     return unquote(urlparse(audio_url).path)
 
 
+def _ui_dir(name: str) -> str:
+    """Absolute path to a UI folder, working both in dev and inside a PyInstaller bundle."""
+    import sys
+    if getattr(sys, "frozen", False):
+        return os.path.join(sys._MEIPASS, "whisp", "ui", name)  # type: ignore[attr-defined]
+    return os.path.join(os.path.dirname(__file__), name)
+
+
 def create_app(settings: Settings) -> Flask:
-    app = Flask(__name__, template_folder="templates", static_folder="static")
+    app = Flask(__name__, template_folder=_ui_dir("templates"), static_folder=_ui_dir("static"))
 
     def entry_view(e):
         return {
