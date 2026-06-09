@@ -11,6 +11,8 @@ from Quartz import (
     kCGEventFlagsChanged,
     kCGEventKeyDown,
     kCGEventKeyUp,
+    kCGEventTapDisabledByTimeout,
+    kCGEventTapDisabledByUserInput,
     kCGEventTapOptionListenOnly,
     kCGHeadInsertEventTap,
     kCGSessionEventTap,
@@ -100,10 +102,19 @@ class HotkeyListener:
             self._on_toggle_lock()
 
     def _handle(self, proxy, etype, event, refcon):
-        if etype == kCGEventFlagsChanged:
-            keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
-            for ev in self._tracker.on_flags_changed(keycode, time.monotonic()):
-                self._dispatch(ev)
+        # This runs on the event-tap thread. It must NEVER block or raise, or
+        # macOS disables the tap. Re-enable it if macOS ever does.
+        try:
+            if etype in (kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput):
+                if self._tap is not None:
+                    CGEventTapEnable(self._tap, True)
+                return event
+            if etype == kCGEventFlagsChanged:
+                keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
+                for ev in self._tracker.on_flags_changed(keycode, time.monotonic()):
+                    self._dispatch(ev)
+        except Exception:
+            pass
         return event
 
     def _run(self):

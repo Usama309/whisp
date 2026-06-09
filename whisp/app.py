@@ -1,11 +1,12 @@
+import queue
 import threading
 import time
 import webbrowser
 
 import rumps
 
-from whisp import config, permissions
-from whisp.audio import Recorder, archive_recording
+from whisp import config, permissions, sysaudio
+from whisp.audio import Recorder, archive_recording, prewarm_microphone
 from whisp.factory import build_pipeline
 from whisp.hotkey import HotkeyListener
 from whisp.settings import Settings
@@ -34,6 +35,11 @@ class WhispApp(rumps.App):
             rumps.MenuItem("Quit", callback=rumps.quit_application),
         ]
         self._server_port = start_server(self.settings)
+        # All recording work runs on this single worker, never on the event-tap
+        # thread — so a slow/failing mic open can never disable the global hotkey.
+        self._actions = queue.Queue()
+        threading.Thread(target=self._worker, daemon=True).start()
+        threading.Thread(target=prewarm_microphone, daemon=True).start()
         self._ensure_permission_then_listen()
 
     def _ensure_permission_then_listen(self):
@@ -78,38 +84,63 @@ class WhispApp(rumps.App):
         permissions.prompt_accessibility()
         permissions.open_accessibility_settings()
 
+    # --- event-tap callbacks: do NOTHING but enqueue (must be instant) ---
+    def _on_press(self):
+        self._actions.put("press")
+
+    def _on_release(self):
+        self._actions.put("release")
+
+    def _on_toggle_lock(self):
+        self._actions.put("toggle")
+
+    # --- worker thread: owns all recording state and heavy work ---
+    def _worker(self):
+        while True:
+            action = self._actions.get()
+            try:
+                self._handle_action(action)
+            except Exception as exc:
+                self.recorder = None
+                self._hands_free = False
+                self.title = IDLE
+                rumps.notification(config.APP_NAME, "Dictation error", str(exc)[:120])
+
+    def _handle_action(self, action):
+        if action == "press":
+            if self.paused or self.recorder is not None:
+                return
+            self._start_recording()
+        elif action == "release":
+            # Releasing the combo stops push-to-talk, but never interrupts hands-free.
+            if self.paused or self.recorder is None or self._hands_free:
+                return
+            self._stop_and_process()
+        elif action == "toggle":
+            if self.paused:
+                return
+            if self.recorder is None:
+                self._hands_free = True
+                self._start_recording()
+            else:
+                self._hands_free = False
+                self._stop_and_process()
+
     def _start_recording(self):
-        self.title = RECORDING
+        self._muted_by_us = False
+        if self.settings.get("mute_while_recording", True) and not sysaudio.is_output_muted():
+            sysaudio.mute_output()
+            self._muted_by_us = True
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
+        self.title = RECORDING
 
     def _stop_and_process(self):
         self.title = WORKING
         recorder, self.recorder = self.recorder, None
-        threading.Thread(target=self._process, args=(recorder,), daemon=True).start()
-
-    def _on_press(self):
-        if self.paused or self.recorder is not None:
-            return
-        self._start_recording()
-
-    def _on_release(self):
-        # Releasing the combo stops push-to-talk, but never interrupts hands-free.
-        if self.paused or self.recorder is None or self._hands_free:
-            return
-        self._stop_and_process()
-
-    def _on_toggle_lock(self):
-        if self.paused:
-            return
-        if self.recorder is None:
-            self._hands_free = True
-            self._start_recording()
-        else:
-            self._hands_free = False
-            self._stop_and_process()
-
-    def _process(self, recorder):
+        if getattr(self, "_muted_by_us", False):
+            sysaudio.unmute_output()
+            self._muted_by_us = False
         try:
             wav_path, duration = recorder.stop()
             audio_url = archive_recording(wav_path)

@@ -12,6 +12,18 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 
 
+def prewarm_microphone() -> None:
+    """Briefly open and close an input stream to trigger the macOS mic prompt
+    early, so the first real dictation doesn't stall on a permission dialog."""
+    try:
+        stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16")
+        stream.start()
+        stream.stop()
+        stream.close()
+    except Exception:
+        pass
+
+
 class Recorder:
     """Push-to-talk recorder: start() begins capture, stop() returns (wav_path, duration)."""
 

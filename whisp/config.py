@@ -52,6 +52,7 @@ DEFAULT_SETTINGS = {
     "language": "en",
     "press_enter": False,
     "cleanup_enabled": True,
+    "mute_while_recording": True,
     "tones": {
         "email": "Professional, complete sentences, polite sign-offs.",
         "work": "Clear and concise, direct, lightly formal.",
