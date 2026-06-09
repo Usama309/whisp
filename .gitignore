@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+*.spec
+.DS_Store
+settings.json
+Transcripts/
+Recordings/
+*.dmg
