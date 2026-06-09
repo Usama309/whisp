@@ -55,6 +55,7 @@ DEFAULT_SETTINGS = {
     "press_enter": False,
     "cleanup_enabled": True,
     "mute_while_recording": False,
+    "pause_media_while_recording": True,
     "sounds_enabled": True,
     "tones": {
         "email": "Professional, complete sentences, polite sign-offs.",

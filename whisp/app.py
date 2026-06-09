@@ -6,7 +6,7 @@ import webbrowser
 
 import rumps
 
-from whisp import config, permissions, sounds, sysaudio
+from whisp import config, media, permissions, sounds, sysaudio
 from whisp.audio import Recorder, archive_recording, prewarm_microphone, is_silent
 from whisp.factory import build_pipeline
 from whisp.hotkey import HotkeyListener, FnHotkeyListener
@@ -43,6 +43,7 @@ class WhispApp(rumps.App):
         self._hands_free = False
         self._session = 0
         self._muted_by_us = False
+        self._media_paused = False
 
         # animation state (rendered by a main-thread timer; workers only set it)
         self._anim_state = "idle"
@@ -175,6 +176,7 @@ class WhispApp(rumps.App):
             except Exception as exc:
                 self.recorder = None
                 self._hands_free = False
+                self._resume_media()
                 self._set_state("error", detail=str(exc)[:80])
 
     def _handle_action(self, action):
@@ -207,6 +209,7 @@ class WhispApp(rumps.App):
             if self.recorder is None:
                 self._begin_capture()
         elif cmd == "confirm":
+            self._pause_media()
             self._cue("start")
             self._set_state("recording")
         elif cmd == "process":
@@ -218,6 +221,7 @@ class WhispApp(rumps.App):
             self._discard_capture()
             self._hands_free = True
             self._begin_capture()
+            self._pause_media()
             self._cue("start")
             self._set_state("recording")
         elif cmd == "unlock":
@@ -225,6 +229,17 @@ class WhispApp(rumps.App):
             self._stop_and_process()
 
     # ---------------- recording ----------------
+    def _pause_media(self):
+        # Pause background video/music so the mic doesn't catch it and nothing is missed.
+        if self.settings.get("pause_media_while_recording", True) and media.is_audio_playing():
+            media.play_pause()
+            self._media_paused = True
+
+    def _resume_media(self):
+        if self._media_paused:
+            media.play_pause()
+            self._media_paused = False
+
     def _begin_capture(self):
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
@@ -244,6 +259,7 @@ class WhispApp(rumps.App):
 
     def _start_recording(self):
         self._session += 1
+        self._pause_media()
         self._cue("start")
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
@@ -263,6 +279,7 @@ class WhispApp(rumps.App):
         recorder, self.recorder = self.recorder, None
         self._cue("stop")
         self._set_state("processing")
+        self._resume_media()      # restore playback immediately on release
         if getattr(self, "_muted_by_us", False):
             sysaudio.unmute_output()
             self._muted_by_us = False

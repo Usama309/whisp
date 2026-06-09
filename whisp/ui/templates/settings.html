@@ -15,6 +15,7 @@
     <textarea name="vocabulary_text" rows="5" placeholder="grocery list&#10;Groq&#10;Kubernetes&#10;heard word => correct word">{{ settings.vocabulary_text }}</textarea></label>
   <label class="check"><input type="checkbox" name="cleanup_enabled" {% if settings.cleanup_enabled %}checked{% endif %}> AI cleanup (remove fillers, format, tone)</label>
   <label class="check"><input type="checkbox" name="press_enter" {% if settings.press_enter %}checked{% endif %}> Press Enter after dictation</label>
+  <label class="check"><input type="checkbox" name="pause_media_while_recording" {% if settings.pause_media_while_recording %}checked{% endif %}> Pause background video/music while recording (auto-resume after)</label>
   <label class="check"><input type="checkbox" name="mute_while_recording" {% if settings.mute_while_recording %}checked{% endif %}> Mute background audio while recording</label>
   <label class="check"><input type="checkbox" name="sounds_enabled" {% if settings.sounds_enabled %}checked{% endif %}> Play sound cues (start / done)</label>
   <button type="submit">Save</button>
@@ -26,7 +27,8 @@ document.getElementById('f').addEventListener('submit',async e=>{
   const body={groq_api_key:fd.get('groq_api_key'),language:fd.get('language'),local_model:fd.get('local_model'),
     vocabulary_text:fd.get('vocabulary_text'),
     cleanup_enabled:e.target.cleanup_enabled.checked,press_enter:e.target.press_enter.checked,
-    mute_while_recording:e.target.mute_while_recording.checked,sounds_enabled:e.target.sounds_enabled.checked};
+    mute_while_recording:e.target.mute_while_recording.checked,sounds_enabled:e.target.sounds_enabled.checked,
+    pause_media_while_recording:e.target.pause_media_while_recording.checked};
   await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   document.getElementById('status').textContent='Saved ✓';
 });
