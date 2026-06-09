@@ -8,7 +8,7 @@ import rumps
 from whisp import config, permissions, sounds, sysaudio
 from whisp.audio import Recorder, archive_recording, prewarm_microphone
 from whisp.factory import build_pipeline
-from whisp.hotkey import HotkeyListener
+from whisp.hotkey import HotkeyListener, FnHotkeyListener
 from whisp.settings import Settings
 from whisp.ui.server import start_server
 
@@ -71,14 +71,17 @@ class WhispApp(rumps.App):
         if self._listener_started:
             return
         hk = self.settings.get("hotkey", config.DEFAULT_HOTKEY)
-        combo = hk.get("combo") or [hk.get("keyCode", 56)]   # tolerate legacy single-key
-        self.listener = HotkeyListener(
-            combo=combo,
-            lock_keycode=hk.get("lockKeyCode"),
-            on_press=self._on_press,
-            on_release=self._on_release,
-            on_lock=self._on_lock,
-        )
+        if hk.get("mode") == "fn":
+            self.listener = FnHotkeyListener(on_action=self._on_fn_action)
+        else:
+            combo = hk.get("combo") or [hk.get("keyCode", 56)]   # tolerate legacy single-key
+            self.listener = HotkeyListener(
+                combo=combo,
+                lock_keycode=hk.get("lockKeyCode"),
+                on_press=self._on_press,
+                on_release=self._on_release,
+                on_lock=self._on_lock,
+            )
         self.listener.start()
         self._listener_started = True
 
@@ -95,6 +98,9 @@ class WhispApp(rumps.App):
 
     def _on_lock(self, kind):
         self._actions.put(("lock", kind))
+
+    def _on_fn_action(self, action):
+        self._actions.put(("fn", action))
 
     # --- worker thread: owns all recording state and heavy work ---
     def _worker(self):
@@ -131,6 +137,45 @@ class WhispApp(rumps.App):
                 # Double-tap locks: start hands-free recording.
                 self._hands_free = True
                 self._start_recording()
+        elif isinstance(action, tuple) and action[0] == "fn":
+            self._handle_fn(action[1])
+
+    def _handle_fn(self, cmd):
+        if self.paused:
+            return
+        if cmd == "rec":                 # begin tentative capture (silent)
+            if self.recorder is None:
+                self._begin_capture()
+        elif cmd == "confirm":           # genuine hold -> show recording + cue
+            self._cue("start")
+            self.title = RECORDING
+        elif cmd == "process":           # hold released -> transcribe
+            self._hands_free = False
+            self._stop_and_process()
+        elif cmd == "discard":           # it was a tap -> drop the capture silently
+            self._discard_capture()
+        elif cmd == "lock":              # double-tap -> hands-free recording
+            self._discard_capture()
+            self._hands_free = True
+            self._begin_capture()
+            self._cue("start")
+            self.title = RECORDING
+        elif cmd == "unlock":            # tap while locked -> transcribe
+            self._hands_free = False
+            self._stop_and_process()
+
+    def _begin_capture(self):
+        self.recorder = Recorder(device=self.settings.get("microphone"))
+        self.recorder.start()
+
+    def _discard_capture(self):
+        if self.recorder is not None and not self._hands_free:
+            recorder, self.recorder = self.recorder, None
+            try:
+                recorder.stop()
+            except Exception:
+                pass
+        self.title = IDLE
 
     def _cue(self, name):
         if self.settings.get("sounds_enabled", True):
