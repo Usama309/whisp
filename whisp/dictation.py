@@ -1,3 +1,6 @@
+from whisp.transcribe.base import strip_artifacts
+
+
 class DictationPipeline:
     """Wires transcription -> cleanup -> insertion -> history. Dependencies injected."""
 
@@ -12,7 +15,7 @@ class DictationPipeline:
 
     def run(self, wav_path: str, duration: float, audio_url: str):
         result = self._transcriber.transcribe(wav_path)
-        raw = (result.text or "").strip()
+        raw = strip_artifacts((result.text or "").strip())
         if not raw:
             return None
         app_name = self._frontmost_app()

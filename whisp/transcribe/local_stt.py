@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 from whisp.transcribe.base import TranscriptionResult
@@ -6,10 +7,12 @@ from whisp.transcribe.base import TranscriptionResult
 class LocalTranscriber:
     """Runs whisper.cpp `whisper-cli` and reads plain-text output from stdout."""
 
-    def __init__(self, binary: str, model_path: str, language: str = "en"):
+    def __init__(self, binary: str, model_path: str, language: str = "en", threads: int = None):
         self._binary = binary
         self._model = model_path
         self._language = language
+        # whisper.cpp defaults to 4 threads; use more cores for ~35% faster runs.
+        self._threads = threads or min(8, os.cpu_count() or 4)
 
     def transcribe(self, wav_path: str) -> TranscriptionResult:
         cmd = [
@@ -17,6 +20,7 @@ class LocalTranscriber:
             "-m", self._model,
             "-f", wav_path,
             "-l", self._language or "auto",
+            "-t", str(self._threads),
             "-nt",          # no timestamps
             "-np",          # no progress prints
         ]

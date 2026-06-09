@@ -5,7 +5,7 @@ import webbrowser
 
 import rumps
 
-from whisp import config, permissions, sysaudio
+from whisp import config, permissions, sounds, sysaudio
 from whisp.audio import Recorder, archive_recording, prewarm_microphone
 from whisp.factory import build_pipeline
 from whisp.hotkey import HotkeyListener
@@ -126,7 +126,13 @@ class WhispApp(rumps.App):
                 self._hands_free = False
                 self._stop_and_process()
 
+    def _cue(self, name):
+        if self.settings.get("sounds_enabled", True):
+            sounds.play(name)
+
     def _start_recording(self):
+        self._cue("start")
+        time.sleep(0.15)  # let the start cue play (and finish) before muting/recording
         self._muted_by_us = False
         if self.settings.get("mute_while_recording", True) and not sysaudio.is_output_muted():
             sysaudio.mute_output()
@@ -141,15 +147,21 @@ class WhispApp(rumps.App):
         if getattr(self, "_muted_by_us", False):
             sysaudio.unmute_output()
             self._muted_by_us = False
+        entry = None
         try:
             wav_path, duration = recorder.stop()
             audio_url = archive_recording(wav_path)
             pipeline = build_pipeline(Settings.load())
-            pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
+            entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
         except Exception as exc:  # surface, never crash the menubar
             rumps.notification(config.APP_NAME, "Dictation failed", str(exc)[:120])
         finally:
             self.title = IDLE
+        if entry is not None:
+            self._cue("done")
+        else:
+            self._cue("empty")
+            rumps.notification(config.APP_NAME, "No speech detected", "Nothing was transcribed.")
 
     def open_history(self, _):
         webbrowser.open(f"http://127.0.0.1:{self._server_port}/")

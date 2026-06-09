@@ -13,6 +13,8 @@
   <label>Local model <input name="local_model" value="{{ settings.local_model }}"></label>
   <label class="check"><input type="checkbox" name="cleanup_enabled" {% if settings.cleanup_enabled %}checked{% endif %}> AI cleanup (remove fillers, format, tone)</label>
   <label class="check"><input type="checkbox" name="press_enter" {% if settings.press_enter %}checked{% endif %}> Press Enter after dictation</label>
+  <label class="check"><input type="checkbox" name="mute_while_recording" {% if settings.mute_while_recording %}checked{% endif %}> Mute background audio while recording</label>
+  <label class="check"><input type="checkbox" name="sounds_enabled" {% if settings.sounds_enabled %}checked{% endif %}> Play sound cues (start / done)</label>
   <button type="submit">Save</button>
   <span id="status"></span>
 </form>
@@ -20,7 +22,8 @@
 document.getElementById('f').addEventListener('submit',async e=>{
   e.preventDefault();const fd=new FormData(e.target);
   const body={groq_api_key:fd.get('groq_api_key'),language:fd.get('language'),local_model:fd.get('local_model'),
-    cleanup_enabled:e.target.cleanup_enabled.checked,press_enter:e.target.press_enter.checked};
+    cleanup_enabled:e.target.cleanup_enabled.checked,press_enter:e.target.press_enter.checked,
+    mute_while_recording:e.target.mute_while_recording.checked,sounds_enabled:e.target.sounds_enabled.checked};
   await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   document.getElementById('status').textContent='Saved ✓';
 });
