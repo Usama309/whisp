@@ -16,6 +16,29 @@ def _audio_path(audio_url: str) -> str:
     return unquote(urlparse(audio_url).path)
 
 
+def vocab_to_text(dictionary: dict) -> str:
+    lines = []
+    for spoken, written in (dictionary or {}).items():
+        lines.append(written if spoken == written else f"{spoken} => {written}")
+    return "\n".join(lines)
+
+
+def parse_vocab(text: str) -> dict:
+    out = {}
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if "=>" in line:
+            spoken, written = line.split("=>", 1)
+            spoken, written = spoken.strip(), written.strip()
+            if spoken and written:
+                out[spoken] = written
+        else:
+            out[line] = line   # word maps to itself (biases STT + fixes casing)
+    return out
+
+
 def _ui_dir(name: str) -> str:
     """Absolute path to a UI folder, working both in dev and inside a PyInstaller bundle."""
     import sys
@@ -55,7 +78,9 @@ def create_app(settings: Settings) -> Flask:
 
     @app.route("/settings")
     def settings_page():
-        return render_template("settings.html", settings=Settings.load().as_dict())
+        data = Settings.load().as_dict()
+        data["vocabulary_text"] = vocab_to_text(data.get("custom_dictionary", {}))
+        return render_template("settings.html", settings=data)
 
     @app.route("/api/transcript/<entry_id>/delete", methods=["POST"])
     def delete(entry_id):
@@ -70,7 +95,10 @@ def create_app(settings: Settings) -> Flask:
     @app.route("/api/settings", methods=["POST"])
     def save_settings():
         s = Settings.load()
-        for key, value in (request.json or {}).items():
+        payload = dict(request.json or {})
+        if "vocabulary_text" in payload:
+            s.set("custom_dictionary", parse_vocab(payload.pop("vocabulary_text")))
+        for key, value in payload.items():
             s.set(key, value)
         s.save()
         return jsonify(ok=True)

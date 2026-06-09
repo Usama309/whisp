@@ -7,12 +7,14 @@ class GroqError(Exception):
     pass
 
 
-def transcribe(api_key: str, wav_path: str, language: str = "en") -> str:
+def transcribe(api_key: str, wav_path: str, language: str = "en", prompt: str = None) -> str:
     with open(wav_path, "rb") as f:
         files = {"file": (wav_path, f, "audio/wav")}
         data = {"model": config.GROQ_STT_MODEL, "response_format": "json", "temperature": "0"}
         if language:
             data["language"] = language
+        if prompt:
+            data["prompt"] = prompt
         resp = requests.post(
             config.GROQ_STT_URL,
             headers={"Authorization": f"Bearer {api_key}"},

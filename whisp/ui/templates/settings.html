@@ -11,6 +11,8 @@
     <input name="groq_api_key" value="{{ settings.groq_api_key }}" placeholder="gsk_…"></label>
   <label>Language <input name="language" value="{{ settings.language }}"></label>
   <label>Local model <input name="local_model" value="{{ settings.local_model }}"></label>
+  <label>Vocabulary &amp; corrections <small>(one per line; improves recognition of names/jargon. Use "heard => correct" to auto-fix, e.g. <code>groh => Groq</code>)</small>
+    <textarea name="vocabulary_text" rows="5" placeholder="grocery list&#10;Groq&#10;Kubernetes&#10;heard word => correct word">{{ settings.vocabulary_text }}</textarea></label>
   <label class="check"><input type="checkbox" name="cleanup_enabled" {% if settings.cleanup_enabled %}checked{% endif %}> AI cleanup (remove fillers, format, tone)</label>
   <label class="check"><input type="checkbox" name="press_enter" {% if settings.press_enter %}checked{% endif %}> Press Enter after dictation</label>
   <label class="check"><input type="checkbox" name="mute_while_recording" {% if settings.mute_while_recording %}checked{% endif %}> Mute background audio while recording</label>
@@ -22,6 +24,7 @@
 document.getElementById('f').addEventListener('submit',async e=>{
   e.preventDefault();const fd=new FormData(e.target);
   const body={groq_api_key:fd.get('groq_api_key'),language:fd.get('language'),local_model:fd.get('local_model'),
+    vocabulary_text:fd.get('vocabulary_text'),
     cleanup_enabled:e.target.cleanup_enabled.checked,press_enter:e.target.press_enter.checked,
     mute_while_recording:e.target.mute_while_recording.checked,sounds_enabled:e.target.sounds_enabled.checked};
   await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

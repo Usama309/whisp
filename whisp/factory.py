@@ -34,12 +34,27 @@ def model_path(local_model: str) -> str:
     return os.path.expanduser(f"~/.whisp-models/ggml-{local_model}.bin")
 
 
+def stt_vocabulary_prompt(dictionary: dict) -> str:
+    """Prime Whisper toward the user's words to reduce mishears (e.g. names, jargon)."""
+    terms = []
+    for spoken, written in (dictionary or {}).items():
+        terms.append(written)
+        if spoken.lower() != written.lower():
+            terms.append(spoken)
+    terms = list(dict.fromkeys(t for t in terms if t))  # unique, ordered
+    if not terms:
+        return None
+    return ("Vocabulary that may appear: " + ", ".join(terms))[:250]
+
+
 def build_pipeline(settings: Settings) -> DictationPipeline:
     key = settings.get("groq_api_key", "")
     language = settings.get("language", "en")
+    dictionary = settings.get("custom_dictionary", {})
     engine = choose_engine(api_key=key, online=is_online())
     if engine == "groq":
-        transcriber = GroqTranscriber(api_key=key, language=language)
+        transcriber = GroqTranscriber(api_key=key, language=language,
+                                      prompt=stt_vocabulary_prompt(dictionary))
     else:
         transcriber = LocalTranscriber(
             binary=whisper_binary(),
@@ -51,7 +66,7 @@ def build_pipeline(settings: Settings) -> DictationPipeline:
         api_key=key if cleanup_enabled else "",
         online=is_online,
         tones=settings.get("tones", {}),
-        dictionary=settings.get("custom_dictionary", {}),
+        dictionary=dictionary,
     )
     return DictationPipeline(
         transcriber=transcriber,

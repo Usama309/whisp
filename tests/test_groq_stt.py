@@ -6,7 +6,7 @@ def test_transcribe_calls_client_and_wraps_result(monkeypatch, tmp_path):
     wav = tmp_path / "a.wav"
     wav.write_bytes(b"RIFF....")
 
-    def fake_transcribe(api_key, wav_path, language):
+    def fake_transcribe(api_key, wav_path, language, prompt=None):
         assert api_key == "gsk_x"
         assert wav_path == str(wav)
         return "  hello there  "

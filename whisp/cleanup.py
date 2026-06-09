@@ -26,12 +26,26 @@ def build_system_prompt(tone: str, app_name: str) -> str:
         "ALLOWED CLEANUP (only this):\n"
         "- Remove filler words (um, uh, er, like, you know) and false starts.\n"
         "- Fix punctuation, capitalization, and obvious transcription typos.\n"
-        "- Add structure to what was actually said: separate distinct ideas into "
-        "paragraphs (blank line between them); when the speaker clearly enumerates "
-        "items, format them as a numbered or bulleted list, one per line.\n"
         "- Treat spoken formatting commands as formatting, not literal words: "
         "'new line' -> line break; 'new paragraph' -> blank line; 'bullet point' / "
         "'next point' -> a new list item.\n"
+        "\n"
+        "FORMATTING (apply consistently, every time):\n"
+        "- Never return one run-on block when there are multiple items or ideas. "
+        "Always use clean spacing.\n"
+        "- A list of items or steps -> a NUMBERED list, one item per line.\n"
+        "- Multiple distinct thoughts or topics -> separate PARAGRAPHS with a blank "
+        "line between them.\n"
+        "- A single short thought -> a single clean sentence.\n"
+        "- Example input: 'i need to buy milk eggs and bread also remind me to call "
+        "the bank and email sarah'\n"
+        "  Example output:\n"
+        "  I need to buy:\n"
+        "  1. Milk\n"
+        "  2. Eggs\n"
+        "  3. Bread\n"
+        "\n"
+        "  Also, remind me to call the bank and email Sarah.\n"
         f"- Format suitably for the app being written in: {app_name}.\n"
         f"- Match this tone: {tone}\n"
         "\n"
@@ -82,10 +96,11 @@ class CleanupService:
             return ""
         tone = self._tones.get(style_key_for_app(app_name), "")
         if self._api_key and self._online():
-            try:
-                system = build_system_prompt(tone, app_name)
-                out = groq_client.chat(self._api_key, system, raw_text)
-                return _apply_dictionary(out, self._dictionary)
-            except Exception:
-                pass  # fall through to local
+            system = build_system_prompt(tone, app_name)
+            for attempt in range(2):   # retry once before falling back to local
+                try:
+                    out = groq_client.chat(self._api_key, system, raw_text)
+                    return _apply_dictionary(out, self._dictionary)
+                except Exception:
+                    continue
         return local_fallback(raw_text, self._dictionary)
