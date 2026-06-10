@@ -46,8 +46,16 @@ DEFAULT_HOTKEY = {
     "lockKeyCode": 56,
 }
 
+# A key may be baked in for distribution via a gitignored build-time module
+# (whisp/_baked_key.py). Behavior is unchanged; this only sets the default key
+# so a fresh install works out of the box. Your own settings.json still wins.
+try:
+    from whisp._baked_key import GROQ_API_KEY as _BAKED_KEY
+except Exception:
+    _BAKED_KEY = ""
+
 DEFAULT_SETTINGS = {
-    "groq_api_key": "",
+    "groq_api_key": _BAKED_KEY,
     "hotkey": DEFAULT_HOTKEY,
     "local_model": "base.en",
     "microphone": None,            # None = system default

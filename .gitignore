@@ -11,3 +11,4 @@ Transcripts/
 Recordings/
 *.dmg
 packaging/assets/
+whisp/_baked_key.py
