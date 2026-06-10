@@ -235,10 +235,27 @@ class WhispApp(rumps.App):
 
     # ---------------- recording ----------------
     def _pause_media(self):
-        # Pause background video/music so the mic doesn't catch it and nothing is missed.
-        if self.settings.get("pause_media_while_recording", True) and media.is_audio_playing():
-            media.play_pause()
-            self._media_paused = True
+        # Only act if sound is genuinely playing.
+        if not self.settings.get("pause_media_while_recording", True):
+            return
+        if not media.is_audio_playing():
+            return
+        media.play_pause()
+        self._media_paused = True
+        # The media key is a toggle. If "is_audio_playing" was a false positive
+        # (e.g. a cue sound) over a PAUSED song, the key just STARTED it. Pausing
+        # releases the output device within ~0.15s, so re-check shortly after: if
+        # audio is still playing, we started a paused song -> undo it.
+        threading.Thread(target=self._verify_media_pause,
+                         args=(self._session,), daemon=True).start()
+
+    def _verify_media_pause(self, session):
+        time.sleep(0.35)
+        if session != self._session:
+            return   # recording already ended; resume is handled on stop
+        if media.is_audio_playing():
+            media.play_pause()        # we started a paused source -> re-pause it
+            self._media_paused = False
 
     def _resume_media(self):
         if self._media_paused:
