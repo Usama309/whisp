@@ -1,0 +1,17 @@
+#!/bin/bash
+# Runs automatically (as root) right after the app is installed to /Applications.
+
+# 1) Install Rosetta on Apple Silicon (needed to run this Intel-built app).
+if [ "$(/usr/bin/uname -m)" = "arm64" ]; then
+  /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+fi
+
+# 2) Make sure the app isn't quarantined (so it opens with no "can't be opened").
+/usr/bin/xattr -dr com.apple.quarantine "/Applications/Whisp.app" 2>/dev/null || true
+
+# 3) Open Whisp as the logged-in user so it can guide through permissions.
+CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+  /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "/Applications/Whisp.app" || true
+fi
+exit 0
