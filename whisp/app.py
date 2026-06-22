@@ -9,10 +9,12 @@ import rumps
 from whisp import config, media, permissions, sounds, sysaudio
 from whisp.audio import Recorder, archive_recording, prewarm_microphone, is_silent
 from whisp.factory import build_pipeline
+from whisp.net import is_online
+from whisp.transcribe.router import choose_engine
 from whisp.history import HistoryStore
 from whisp.hotkey import HotkeyListener, FnHotkeyListener
 from whisp.inserter import copy_to_clipboard
-from whisp.logs import log_path
+from whisp.logs import log, log_path
 from whisp.settings import Settings
 from whisp.ui.server import start_server
 
@@ -310,8 +312,18 @@ class WhispApp(rumps.App):
             wav_path, duration = recorder.stop()
             if not is_silent(wav_path):
                 audio_url = archive_recording(wav_path)
-                pipeline = build_pipeline(Settings.load())
-                entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
+                settings = Settings.load()
+                try:
+                    pipeline = build_pipeline(settings)
+                    entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
+                except Exception as exc:
+                    # Groq path failed (bad key, quota, outage). Retry on the
+                    # bundled whisper.cpp so the dictation still completes.
+                    if choose_engine(settings.get("groq_api_key", ""), is_online()) != "groq":
+                        raise
+                    log(f"PIPELINE  groq failed ({str(exc)[:80]}); retrying local whisper.cpp")
+                    pipeline = build_pipeline(settings, force_local=True)
+                    entry = pipeline.run(wav_path=wav_path, duration=duration, audio_url=audio_url)
         except Exception as exc:
             self._set_state("error", detail=str(exc)[:80])
             return

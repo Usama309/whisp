@@ -47,11 +47,14 @@ def stt_vocabulary_prompt(dictionary: dict) -> str:
     return ("Vocabulary that may appear: " + ", ".join(terms))[:250]
 
 
-def build_pipeline(settings: Settings) -> DictationPipeline:
+def build_pipeline(settings: Settings, force_local: bool = False) -> DictationPipeline:
     key = settings.get("groq_api_key", "")
     language = settings.get("language", "en")
     dictionary = settings.get("custom_dictionary", {})
-    engine = choose_engine(api_key=key, online=is_online())
+    # force_local is the safety net: when a Groq call has just failed (bad key,
+    # quota, outage), rebuild the pipeline on the bundled whisper.cpp + offline
+    # cleanup so the dictation still completes instead of erroring out.
+    engine = "local" if force_local else choose_engine(api_key=key, online=is_online())
     if engine == "groq":
         transcriber = GroqTranscriber(api_key=key, language=language,
                                       prompt=stt_vocabulary_prompt(dictionary))
@@ -63,7 +66,7 @@ def build_pipeline(settings: Settings) -> DictationPipeline:
         )
     cleanup_enabled = settings.get("cleanup_enabled", True)
     cleaner = CleanupService(
-        api_key=key if cleanup_enabled else "",
+        api_key="" if force_local else (key if cleanup_enabled else ""),
         online=is_online,
         tones=settings.get("tones", {}),
         dictionary=dictionary,
