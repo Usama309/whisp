@@ -20,7 +20,7 @@ def transcribe(api_key: str, wav_path: str, language: str = "en", prompt: str = 
             headers={"Authorization": f"Bearer {api_key}"},
             files=files,
             data=data,
-            timeout=60,
+            timeout=(5, 60),   # (connect, read): drop to local fast if Groq is unreachable
         )
     if resp.status_code != 200:
         raise GroqError(f"STT {resp.status_code}: {resp.text[:200]}")
