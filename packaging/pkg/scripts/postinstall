@@ -9,9 +9,33 @@ fi
 # 2) Make sure the app isn't quarantined (so it opens with no "can't be opened").
 /usr/bin/xattr -dr com.apple.quarantine "/Applications/Whisp.app" 2>/dev/null || true
 
-# 3) Open Whisp as the logged-in user so it can guide through permissions.
+# 3) Install a LaunchAgent so Whisp starts at every login and relaunches if it
+#    crashes (so it is never just "closed" when the user needs it). Installed for
+#    the logged-in user; a clean Quit from the menu still works (won't relaunch).
 CONSOLE_USER="$(/usr/bin/stat -f '%Su' /dev/console)"
 if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
-  /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "/Applications/Whisp.app" || true
+  USER_UID="$(/usr/bin/id -u "$CONSOLE_USER")"
+  LA_DIR="/Users/$CONSOLE_USER/Library/LaunchAgents"
+  PLIST="$LA_DIR/com.usama.whisp.plist"
+  /bin/mkdir -p "$LA_DIR"
+  /bin/cat > "$PLIST" <<'PLISTEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.usama.whisp</string>
+    <key>ProgramArguments</key>
+    <array><string>/Applications/Whisp.app/Contents/MacOS/Whisp</string></array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+    <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>
+PLISTEOF
+  /usr/sbin/chown "$CONSOLE_USER" "$PLIST"
+  # (re)load it as the logged-in user so it starts now and at every login.
+  /bin/launchctl bootout "gui/$USER_UID" "$PLIST" 2>/dev/null || true
+  /bin/launchctl bootstrap "gui/$USER_UID" "$PLIST" 2>/dev/null \
+    || /usr/bin/sudo -u "$CONSOLE_USER" /bin/launchctl load -w "$PLIST" 2>/dev/null || true
 fi
 exit 0
