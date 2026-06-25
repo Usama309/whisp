@@ -53,48 +53,49 @@ class Recorder:
 
     def __init__(self, device=None):
         self._device = device
-        self._stream = None
         self._frames = []
         self._start_time = None
+        self._stop_flag = threading.Event()
+        self._thread = None
         self.level = 0.0   # live input level 0..1 for the menu-bar VU meter
 
     def start(self):
         self._frames = []
+        self._stop_flag.clear()
         self._start_time = time.time()
+        self._thread = threading.Thread(target=self._record_loop, daemon=True)
+        self._thread.start()
 
-        def callback(indata, frames, time_info, status):
-            self._frames.append(indata.copy())
-            try:
-                rms = float(np.sqrt(np.mean(indata.astype(np.float64) ** 2)))
-                self.level = min(1.0, rms / 8000.0)
-            except Exception:
-                pass
-
-        self._stream = sd.InputStream(
-            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
-            device=self._device, callback=callback,
-        )
-        self._stream.start()
+    def _record_loop(self):
+        # Read audio on our OWN thread via a blocking read, not via a PortAudio
+        # callback. A Python callback fired on PortAudio's audio thread can
+        # deadlock against stream close over the GIL (very likely under Rosetta
+        # on Apple Silicon); a blocking read on a thread we control cannot. The
+        # `with` block opens and (on exit) cleanly closes the stream on this same
+        # thread, after the read loop has stopped, so there is no close-vs-callback race.
+        blocksize = SAMPLE_RATE // 10   # 0.1s chunks
+        try:
+            with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
+                                dtype="int16", device=self._device,
+                                blocksize=blocksize) as stream:
+                while not self._stop_flag.is_set():
+                    data, _overflowed = stream.read(blocksize)
+                    self._frames.append(data.copy())
+                    try:
+                        rms = float(np.sqrt(np.mean(data.astype(np.float64) ** 2)))
+                        self.level = min(1.0, rms / 8000.0)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     def stop(self):
         duration = time.time() - (self._start_time or time.time())
-        stream, self._stream = self._stream, None
-        if stream is not None:
-            # PortAudio stop()/close() can rarely block on a bad device state;
-            # bound it on a side thread so it can never freeze the whole app.
-            # If it won't close in time, abandon it and keep the audio we have.
-            done = threading.Event()
-
-            def _close():
-                try:
-                    stream.stop()
-                    stream.close()
-                finally:
-                    done.set()
-
-            threading.Thread(target=_close, daemon=True).start()
-            done.wait(timeout=3.0)
-        frames = list(self._frames)   # snapshot in case the callback is still firing
+        self._stop_flag.set()
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            thread.join(timeout=3.0)   # loop exits and the stream closes on its own thread
+        frames = list(self._frames)
         wav_path = tempfile.mktemp(suffix=".wav", prefix="whisp_")
         with wave.open(wav_path, "wb") as wf:
             wf.setnchannels(CHANNELS)
