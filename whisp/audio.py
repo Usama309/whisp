@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+import threading
 import time
 import wave
 from urllib.parse import quote
@@ -77,16 +78,29 @@ class Recorder:
 
     def stop(self):
         duration = time.time() - (self._start_time or time.time())
-        if self._stream:
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
+        stream, self._stream = self._stream, None
+        if stream is not None:
+            # PortAudio stop()/close() can rarely block on a bad device state;
+            # bound it on a side thread so it can never freeze the whole app.
+            # If it won't close in time, abandon it and keep the audio we have.
+            done = threading.Event()
+
+            def _close():
+                try:
+                    stream.stop()
+                    stream.close()
+                finally:
+                    done.set()
+
+            threading.Thread(target=_close, daemon=True).start()
+            done.wait(timeout=3.0)
+        frames = list(self._frames)   # snapshot in case the callback is still firing
         wav_path = tempfile.mktemp(suffix=".wav", prefix="whisp_")
         with wave.open(wav_path, "wb") as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(2)
             wf.setframerate(SAMPLE_RATE)
-            for chunk in self._frames:
+            for chunk in frames:
                 wf.writeframes(chunk.tobytes())
         return wav_path, duration
 

@@ -27,7 +27,7 @@ class LocalTranscriber:
             "-np",          # no progress prints
         ]
         t = time.time()
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if proc.returncode != 0:
             raise RuntimeError(f"whisper-cli failed: {proc.stderr[:200]}")
         text = " ".join(line.strip() for line in proc.stdout.splitlines() if line.strip())

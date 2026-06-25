@@ -320,9 +320,12 @@ class WhispApp(rumps.App):
         self._resume_media()      # restore any paused playback immediately on release
         entry = None
         try:
+            log("STOP  stopping recorder...")
             wav_path, duration = recorder.stop()
+            log(f"STOP  recorder stopped (dur={duration:.1f}s); checking silence...")
             if not is_silent(wav_path):
                 audio_url = archive_recording(wav_path)
+                log("STOP  archived; running pipeline...")
                 settings = Settings.load()
                 try:
                     pipeline = build_pipeline(settings)
