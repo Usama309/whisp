@@ -217,6 +217,7 @@ class WhispApp(rumps.App):
                 self._begin_capture()
         elif cmd == "confirm":
             self._pause_media()
+            self._mute_output_async()
             self._cue("start")
             self._set_state("recording")
         elif cmd == "process":
@@ -229,6 +230,7 @@ class WhispApp(rumps.App):
             self._hands_free = True
             self._begin_capture()
             self._pause_media()
+            self._mute_output_async()
             self._cue("start")
             self._set_state("recording")
         elif cmd == "unlock":
@@ -275,6 +277,9 @@ class WhispApp(rumps.App):
                 recorder.stop()
             except Exception:
                 pass
+        if getattr(self, "_muted_by_us", False):
+            sysaudio.unmute_output()
+            self._muted_by_us = False
         self._set_state("idle")
 
     def _cue(self, name):
@@ -284,13 +289,19 @@ class WhispApp(rumps.App):
     def _start_recording(self):
         self._session += 1
         self._pause_media()
+        self._mute_output_async()
         self._cue("start")
         self.recorder = Recorder(device=self.settings.get("microphone"))
         self.recorder.start()
         self._set_state("recording")
-        if self.settings.get("mute_while_recording", False):
-            sid = self._session
-            threading.Thread(target=self._delayed_mute, args=(sid,), daemon=True).start()
+
+    def _mute_output_async(self):
+        # Mute the system output while recording so the mic can't pick up
+        # playing audio. Done on a short delay so the "start" cue still plays.
+        if not self.settings.get("mute_while_recording", False):
+            return
+        sid = self._session
+        threading.Thread(target=self._delayed_mute, args=(sid,), daemon=True).start()
 
     def _delayed_mute(self, sid):
         time.sleep(0.25)
@@ -301,12 +312,12 @@ class WhispApp(rumps.App):
     def _stop_and_process(self):
         self._session += 1
         recorder, self.recorder = self.recorder, None
+        if getattr(self, "_muted_by_us", False):
+            sysaudio.unmute_output()   # unmute before the stop cue so it's audible
+            self._muted_by_us = False
         self._cue("stop")
         self._set_state("processing")
-        self._resume_media()      # restore playback immediately on release
-        if getattr(self, "_muted_by_us", False):
-            sysaudio.unmute_output()
-            self._muted_by_us = False
+        self._resume_media()      # restore any paused playback immediately on release
         entry = None
         try:
             wav_path, duration = recorder.stop()
