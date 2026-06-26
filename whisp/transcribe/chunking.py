@@ -1,9 +1,12 @@
 """Split long recordings into short segments and transcribe them, so audio of
 any length (15 min, 1 hour, more) works without hitting upload-size limits or
 timeouts. Short recordings pass straight through unchanged."""
+import collections
 import concurrent.futures
 import os
 import tempfile
+import threading
+import time
 import wave
 
 from whisp.logs import log
@@ -11,6 +14,43 @@ from whisp.logs import log
 # ~2 min per chunk at 16 kHz mono 16-bit is ~3.8 MB: well under Groq's 25 MB
 # limit and uploads quickly even on slow connections.
 CHUNK_SECONDS = 120
+
+# Stay safely under Groq's free-tier 20 requests/min for whisper-large-v3.
+_RPM_LIMIT = 18
+_rate_lock = threading.Lock()
+_recent = collections.deque()   # monotonic timestamps of recent requests
+
+
+def _rate_gate():
+    """Block until starting another request keeps us under _RPM_LIMIT / minute."""
+    while True:
+        with _rate_lock:
+            now = time.monotonic()
+            while _recent and _recent[0] < now - 60:
+                _recent.popleft()
+            if len(_recent) < _RPM_LIMIT:
+                _recent.append(now)
+                return
+            sleep_for = 60 - (now - _recent[0]) + 0.05
+        time.sleep(max(0.1, sleep_for))
+
+
+def _with_rate_limit_and_retry(transcribe_one):
+    """Wrap a chunk transcriber with rate-limiting + a short backoff retry if it
+    still gets throttled (429), so long recordings never fail on rate limits."""
+    def wrapped(path):
+        for attempt in range(4):
+            _rate_gate()
+            try:
+                return transcribe_one(path)
+            except Exception as exc:
+                if "429" in str(exc) and attempt < 3:
+                    log(f"CHUNK  rate-limited, backing off ({attempt + 1})")
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                raise
+        return ""
+    return wrapped
 
 
 def duration_seconds(wav_path: str) -> float:
@@ -54,9 +94,10 @@ def transcribe_chunked(wav_path, transcribe_one, parallel=True, chunk_secs=CHUNK
     log(f"CHUNK  split into {len(chunks)} segments of ~{chunk_secs}s")
     try:
         if parallel:
-            workers = min(8, len(chunks))
+            fn = _with_rate_limit_and_retry(transcribe_one)
+            workers = min(6, len(chunks))
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-                texts = list(ex.map(transcribe_one, chunks))
+                texts = list(ex.map(fn, chunks))
         else:
             texts = [transcribe_one(c) for c in chunks]
     finally:
