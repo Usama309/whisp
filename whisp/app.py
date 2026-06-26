@@ -267,8 +267,11 @@ class WhispApp(rumps.App):
             self._media_paused = False
 
     def _begin_capture(self):
+        # Reload settings each recording so Settings toggles (mute, pause, sound
+        # cues, noise reduction, mic) take effect immediately without a restart.
+        self.settings = Settings.load()
         self.recorder = Recorder(device=self.settings.get("microphone"),
-                                 denoise=self.settings.get("noise_reduction", True))
+                                 denoise=self.settings.get("noise_reduction", False))
         self.recorder.start()
 
     def _discard_capture(self):
@@ -288,12 +291,13 @@ class WhispApp(rumps.App):
             sounds.play(name)
 
     def _start_recording(self):
+        self.settings = Settings.load()   # pick up live Settings changes (see _begin_capture)
         self._session += 1
         self._pause_media()
         self._mute_output_async()
         self._cue("start")
         self.recorder = Recorder(device=self.settings.get("microphone"),
-                                 denoise=self.settings.get("noise_reduction", True))
+                                 denoise=self.settings.get("noise_reduction", False))
         self.recorder.start()
         self._set_state("recording")
 
