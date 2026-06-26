@@ -1,37 +1,87 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Whisp · Settings</title>
-<link rel="stylesheet" href="/static/app.css"></head>
-<body>
-<header><h1>⚙️ Whisp Settings</h1>
-  <nav><a href="/">History</a> · <a href="/settings">Settings</a></nav>
-</header>
-<main>
-<form id="f">
-  <label>Groq API key <small>(optional — free at console.groq.com; blank = local Whisper)</small>
-    <input name="groq_api_key" value="{{ settings.groq_api_key }}" placeholder="gsk_…"></label>
-  <label>Language <input name="language" value="{{ settings.language }}"></label>
-  <label>Local model <input name="local_model" value="{{ settings.local_model }}"></label>
-  <label>Vocabulary &amp; corrections <small>(one per line; improves recognition of names/jargon. Use "heard => correct" to auto-fix, e.g. <code>groh => Groq</code>)</small>
-    <textarea name="vocabulary_text" rows="5" placeholder="grocery list&#10;Groq&#10;Kubernetes&#10;heard word => correct word">{{ settings.vocabulary_text }}</textarea></label>
-  <label class="check"><input type="checkbox" name="cleanup_enabled" {% if settings.cleanup_enabled %}checked{% endif %}> AI cleanup (remove fillers, format, tone)</label>
-  <label class="check"><input type="checkbox" name="press_enter" {% if settings.press_enter %}checked{% endif %}> Press Enter after dictation</label>
-  <label class="check"><input type="checkbox" name="pause_media_while_recording" {% if settings.pause_media_while_recording %}checked{% endif %}> Pause background video/music while recording (auto-resume after)</label>
-  <label class="check"><input type="checkbox" name="mute_while_recording" {% if settings.mute_while_recording %}checked{% endif %}> Mute background audio while recording</label>
-  <label class="check"><input type="checkbox" name="sounds_enabled" {% if settings.sounds_enabled %}checked{% endif %}> Play sound cues (start / done)</label>
-  <button type="submit">Save</button>
-  <span id="status"></span>
-</form>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whisp · Settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head><body>
+<div class="top"><div class="topin">
+  <div class="brand"><span class="logo">🎙</span> Whisp <span class="statusdot" title="running"></span></div>
+  <div class="tabs"><a href="/">History</a><a href="/settings" class="on">Settings</a></div>
+  <div class="spacer"></div>
+  <span class="kbd">Hold Fn to dictate</span>
+</div></div>
+
+<div class="wrap" style="max-width:680px">
+
+  <div class="sechead">Dictation <span class="ln"></span></div>
+  <div class="panel">
+    <div class="row"><div class="info"><div class="t">Hotkey</div><div class="d">Hold to talk, double-tap to lock hands-free.</div></div>
+      <span class="pill">{{ settings.hotkey.name if settings.hotkey else "Fn" }}</span></div>
+    <div class="row"><div class="info"><div class="t">Language</div><div class="d">Spoken language (e.g. en, es, auto).</div></div>
+      <input class="field" id="language" value="{{ settings.language }}" style="width:120px"></div>
+    <div class="row"><div class="info"><div class="t">Press Enter after paste</div><div class="d">Auto-send in chat apps.</div></div>
+      <div class="toggle{% if settings.press_enter %} on{% endif %}" data-key="press_enter" onclick="this.classList.toggle('on')"><b></b></div></div>
+  </div>
+
+  <div class="sechead">Audio <span class="ln"></span></div>
+  <div class="panel">
+    <div class="row"><div class="info"><div class="t">Mute system audio while recording</div><div class="d">So the mic doesn't pick up what's playing.</div></div>
+      <div class="toggle{% if settings.mute_while_recording %} on{% endif %}" data-key="mute_while_recording" onclick="this.classList.toggle('on')"><b></b></div></div>
+    <div class="row"><div class="info"><div class="t">Pause background video/music</div><div class="d">Pause media while recording, resume after.</div></div>
+      <div class="toggle{% if settings.pause_media_while_recording %} on{% endif %}" data-key="pause_media_while_recording" onclick="this.classList.toggle('on')"><b></b></div></div>
+    <div class="row"><div class="info"><div class="t">Sound cues</div><div class="d">Subtle start / done chimes.</div></div>
+      <div class="toggle{% if settings.sounds_enabled %} on{% endif %}" data-key="sounds_enabled" onclick="this.classList.toggle('on')"><b></b></div></div>
+  </div>
+
+  <div class="sechead">Cleanup &amp; recognition <span class="ln"></span></div>
+  <div class="panel">
+    <div class="row"><div class="info"><div class="t">AI cleanup</div><div class="d">Removes filler, fixes punctuation. Only ever transcribes — never answers.</div></div>
+      <div class="toggle{% if settings.cleanup_enabled %} on{% endif %}" data-key="cleanup_enabled" onclick="this.classList.toggle('on')"><b></b></div></div>
+    <div class="row col"><div class="info"><div class="t">Vocabulary &amp; corrections</div><div class="d">One per line. Use “heard => correct” to auto-fix, e.g. <span class="kbd">groh => Groq</span></div></div>
+      <textarea class="field" id="vocabulary_text" rows="4" placeholder="Groq&#10;Kubernetes&#10;heard word => correct word">{{ settings.vocabulary_text }}</textarea></div>
+    <div class="row"><div class="info"><div class="t">Local model</div><div class="d">Offline fallback model (advanced).</div></div>
+      <input class="field" id="local_model" value="{{ settings.local_model }}" style="width:130px"></div>
+  </div>
+
+  <div class="sechead">System <span class="ln"></span></div>
+  <div class="panel">
+    <div class="row"><div class="info"><div class="t">Launch at login</div><div class="d">Always running when you need it; relaunches if it crashes.</div></div>
+      <div class="toggle{% if settings.launch_at_login %} on{% endif %}" id="launchToggle" onclick="toggleLaunch(this)"><b></b></div></div>
+    <div class="row col"><div class="info"><div class="t">Groq API key</div><div class="d">For cloud transcription &amp; cleanup. Blank = offline Whisper only.</div></div>
+      <input class="field" id="groq_api_key" value="{{ settings.groq_api_key }}" placeholder="gsk_…"></div>
+  </div>
+
+  <div class="savebar">
+    <button class="btn" onclick="save()">Save changes</button>
+    <span class="saved" id="saved">Saved ✓</span>
+  </div>
+  <div class="note">🔒 Everything runs on your Mac. Recordings &amp; transcripts stay on your device; only the audio sent for transcription leaves.</div>
+</div>
+
 <script>
-document.getElementById('f').addEventListener('submit',async e=>{
-  e.preventDefault();const fd=new FormData(e.target);
-  const body={groq_api_key:fd.get('groq_api_key'),language:fd.get('language'),local_model:fd.get('local_model'),
-    vocabulary_text:fd.get('vocabulary_text'),
-    cleanup_enabled:e.target.cleanup_enabled.checked,press_enter:e.target.press_enter.checked,
-    mute_while_recording:e.target.mute_while_recording.checked,sounds_enabled:e.target.sounds_enabled.checked,
-    pause_media_while_recording:e.target.pause_media_while_recording.checked};
-  await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  document.getElementById('status').textContent='Saved ✓';
-});
+  function tval(key){const t=document.querySelector('.toggle[data-key="'+key+'"]');return t?t.classList.contains('on'):false;}
+  function save(){
+    const body={
+      language:document.getElementById('language').value,
+      local_model:document.getElementById('local_model').value,
+      groq_api_key:document.getElementById('groq_api_key').value,
+      vocabulary_text:document.getElementById('vocabulary_text').value,
+      press_enter:tval('press_enter'),
+      mute_while_recording:tval('mute_while_recording'),
+      pause_media_while_recording:tval('pause_media_while_recording'),
+      sounds_enabled:tval('sounds_enabled'),
+      cleanup_enabled:tval('cleanup_enabled'),
+    };
+    fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(()=>{const s=document.getElementById('saved');s.classList.add('show');setTimeout(()=>s.classList.remove('show'),1600);});
+  }
+  function toggleLaunch(el){
+    const enabled=!el.classList.contains('on');
+    el.classList.toggle('on');
+    fetch('/api/launch-at-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})})
+      .then(r=>r.json()).then(d=>{el.classList.toggle('on', d.enabled);});
+  }
 </script>
-</main>
 </body></html>

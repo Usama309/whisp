@@ -1,12 +1,35 @@
 import os
 import threading
+import time
 from urllib.parse import unquote, urlparse
 
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
+from whisp import autostart
 from whisp.history import HistoryStore
 from whisp.settings import Settings
 from whisp.timeutil import apple_to_unix
+
+
+def _day_label(unix_ts: float) -> str:
+    """Human day bucket for grouping: Today / Yesterday / 'Mon D'."""
+    if not unix_ts:
+        return "Earlier"
+    day = time.strftime("%Y-%m-%d", time.localtime(unix_ts))
+    today = time.strftime("%Y-%m-%d", time.localtime())
+    yest = time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
+    if day == today:
+        return "Today"
+    if day == yest:
+        return "Yesterday"
+    return time.strftime("%b %-d", time.localtime(unix_ts))
+
+
+def _compute_stats(entries) -> dict:
+    """Totals shown in the history header (over ALL entries, not the filter)."""
+    words = sum(len((e.text or "").split()) for e in entries)
+    talk = sum((e.duration or 0) for e in entries)
+    return {"count": len(entries), "words": words, "hours": round(talk / 3600.0, 1)}
 
 
 def _audio_path(audio_url: str) -> str:
@@ -51,11 +74,17 @@ def create_app(settings: Settings) -> Flask:
     app = Flask(__name__, template_folder=_ui_dir("templates"), static_folder=_ui_dir("static"))
 
     def entry_view(e):
+        ts = apple_to_unix(e.date)
+        dur = e.duration or 0
+        mins, secs = divmod(int(dur), 60)
         return {
             "id": e.id, "text": e.text, "raw_text": e.raw_text,
             "app_context": e.app_context, "is_flagged": e.is_flagged,
-            "duration": round(e.duration, 1),
-            "unix_date": apple_to_unix(e.date),
+            "duration": round(dur, 1),
+            "dur_label": f"{mins}:{secs:02d}",
+            "words": len((e.text or "").split()),
+            "unix_date": ts,
+            "day": _day_label(ts),
             "has_audio": os.path.exists(_audio_path(e.audio_url)),
         }
 
@@ -73,14 +102,29 @@ def create_app(settings: Settings) -> Flask:
     def history():
         q = request.args.get("q", "")
         store = HistoryStore()
-        entries = store.search(q) if q else store.list()
-        return render_template("history.html", entries=[entry_view(e) for e in entries], q=q)
+        all_entries = store.list()
+        shown = store.search(q) if q else all_entries
+        return render_template(
+            "history.html",
+            entries=[entry_view(e) for e in shown],
+            stats=_compute_stats(all_entries),
+            q=q,
+        )
 
     @app.route("/settings")
     def settings_page():
         data = Settings.load().as_dict()
         data["vocabulary_text"] = vocab_to_text(data.get("custom_dictionary", {}))
+        data["launch_at_login"] = autostart.is_enabled()
         return render_template("settings.html", settings=data)
+
+    @app.route("/api/launch-at-login", methods=["POST"])
+    def set_launch_at_login():
+        if bool(request.json.get("enabled")):
+            autostart.enable()
+        else:
+            autostart.disable()
+        return jsonify(ok=True, enabled=autostart.is_enabled())
 
     @app.route("/api/transcript/<entry_id>/delete", methods=["POST"])
     def delete(entry_id):

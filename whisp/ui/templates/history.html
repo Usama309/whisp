@@ -1,34 +1,89 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Whisp · History</title>
-<link rel="stylesheet" href="/static/app.css"></head>
-<body>
-<header><h1>🎙️ Whisp History</h1>
-  <nav><a href="/">History</a> · <a href="/settings">Settings</a></nav>
-  <form method="get" action="/"><input name="q" value="{{ q }}" placeholder="Search transcripts…"><button>Search</button></form>
-</header>
-<main>
-{% for e in entries %}
-  <article class="entry{% if e.is_flagged %} flagged{% endif %}" data-id="{{ e.id }}">
-    <p class="text">{{ e.text }}</p>
-    <p class="meta"><span class="when" data-ts="{{ e.unix_date }}"></span> · {{ e.app_context or "—" }} · {{ e.duration }}s</p>
-    {% if e.has_audio %}<audio controls preload="none" src="/audio/{{ e.id }}"></audio>{% endif %}
-    <div class="actions">
-      <button onclick="copyText(this)">Copy</button>
-      <button onclick="flagEntry('{{ e.id }}')">{% if e.is_flagged %}Unflag{% else %}Flag{% endif %}</button>
-      <button onclick="deleteEntry('{{ e.id }}')">Delete</button>
-    </div>
-  </article>
-{% else %}
-  <p class="empty">No transcripts yet. Hold your hotkey and speak.</p>
-{% endfor %}
-</main>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whisp · History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head><body>
+<div class="top"><div class="topin">
+  <div class="brand"><span class="logo">🎙</span> Whisp <span class="statusdot" title="running"></span></div>
+  <div class="tabs"><a href="/" class="on">History</a><a href="/settings">Settings</a></div>
+  <div class="spacer"></div>
+  <span class="kbd">Hold Fn to dictate</span>
+</div></div>
+
+<div class="wrap">
+  <div class="recbar"><span class="pulse"></span>
+    <div><b>Ready.</b> Hold your hotkey anywhere and speak — text appears at your cursor.</div>
+    <span class="kbd">Fn</span>
+  </div>
+
+  <form class="search" method="get" action="/">
+    <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+    <input name="q" value="{{ q }}" placeholder="Search your dictations…" autocomplete="off">
+  </form>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{{ stats.count }}</div><div class="l">Dictations</div></div>
+    <div class="stat"><div class="n acc">{{ "{:,}".format(stats.words) }} <span>words</span></div><div class="l">Transcribed</div></div>
+    <div class="stat"><div class="n">{{ stats.hours }}<span>h</span></div><div class="l">Talk time</div></div>
+  </div>
+
+  {% set ns = namespace(day='') %}
+  {% for e in entries %}
+    {% if e.day != ns.day %}{% set ns.day = e.day %}
+      <div class="sechead">{{ e.day }} <span class="ln"></span></div>
+    {% endif %}
+    <article class="card{% if e.is_flagged %} flagged{% endif %}" data-id="{{ e.id }}">
+      <div class="meta">
+        <span class="chip">{{ e.app_context or "Dictation" }}</span>
+        <span class="dur">{{ e.dur_label }}</span>
+        <span class="time" data-ts="{{ e.unix_date }}"></span>
+        {% if e.is_flagged %}<span class="flagtag">⚑ flagged</span>{% endif %}
+      </div>
+      <p class="text clamp">{{ e.text }}</p>
+      <div class="actions">
+        {% if e.has_audio %}<button class="act primary" onclick="playAudio('{{ e.id }}',this)">▶ Play</button>{% endif %}
+        <button class="act" onclick="copyText(this)">⧉ Copy</button>
+        <button class="act" onclick="toggleOpen(this)">⤢ Expand</button>
+        <button class="act" onclick="flagEntry('{{ e.id }}',{{ 'true' if e.is_flagged else 'false' }})">⚑ {{ 'Unflag' if e.is_flagged else 'Flag' }}</button>
+        <button class="act danger" onclick="deleteEntry('{{ e.id }}')">🗑 Delete</button>
+      </div>
+    </article>
+  {% else %}
+    <div class="empty">{% if q %}No transcripts match “{{ q }}”.{% else %}No transcripts yet. Hold your hotkey and speak.{% endif %}</div>
+  {% endfor %}
+</div>
+
 <script>
-document.querySelectorAll('.when').forEach(el=>{
-  const ts=parseFloat(el.dataset.ts);
-  if(ts>0){el.textContent=new Date(ts*1000).toLocaleString();}
-});
-function copyText(btn){navigator.clipboard.writeText(btn.closest('.entry').querySelector('.text').textContent);btn.textContent='Copied';}
-function flagEntry(id){const flagged=event.target.textContent==='Flag';fetch(`/api/transcript/${id}/flag`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flagged})}).then(()=>location.reload());}
-function deleteEntry(id){if(confirm('Delete this transcript?'))fetch(`/api/transcript/${id}/delete`,{method:'POST'}).then(()=>location.reload());}
+  document.querySelectorAll('.time').forEach(el=>{
+    const ts=parseFloat(el.dataset.ts);
+    if(ts>0) el.textContent=new Date(ts*1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  });
+  let _audio=null, _btn=null;
+  function playAudio(id, btn){
+    if(_audio && _btn===btn){ if(_audio.paused){_audio.play();btn.textContent='⏸ Pause';} else {_audio.pause();btn.textContent='▶ Play';} return; }
+    if(_audio){_audio.pause(); if(_btn)_btn.textContent='▶ Play';}
+    _audio=new Audio('/audio/'+id); _btn=btn; btn.textContent='⏸ Pause';
+    _audio.play(); _audio.onended=()=>{btn.textContent='▶ Play';};
+  }
+  function copyText(btn){
+    const t=btn.closest('.card').querySelector('.text').textContent;
+    navigator.clipboard.writeText(t).then(()=>{const o=btn.textContent;btn.textContent='✓ Copied';setTimeout(()=>btn.textContent=o,1200);});
+  }
+  function toggleOpen(btn){
+    const card=btn.closest('.card'); const p=card.querySelector('.text');
+    p.classList.toggle('clamp'); card.classList.toggle('open');
+    btn.textContent = p.classList.contains('clamp') ? '⤢ Expand' : '⤡ Collapse';
+  }
+  function flagEntry(id, flagged){
+    fetch('/api/transcript/'+id+'/flag',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({flagged:!flagged})}).then(()=>location.reload());
+  }
+  function deleteEntry(id){
+    if(!confirm('Delete this transcript?'))return;
+    fetch('/api/transcript/'+id+'/delete',{method:'POST'}).then(()=>location.reload());
+  }
 </script>
 </body></html>
