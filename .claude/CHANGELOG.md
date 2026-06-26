@@ -21,7 +21,12 @@
 - [2026-06-09] Packaging: relocated whisper/ggml dylibs and backend plugins to @loader_path; PyInstaller .app + DMG; verified self-contained on a simulated brew-free Mac.
 
 ### Changed
+- [2026-06-26] Settings now reload at the start of each dictation, so toggles (mute, sound cues, noise reduction, mic) apply immediately without an app restart.
+- [2026-06-26] Default noise_reduction OFF (Groq whisper is noise-robust; DSP pre-processing slightly hurt accuracy).
 - [2026-06-09] Archive recordings as WAV instead of opus to drop the ffmpeg bundling dependency.
+
+### Removed
+- [2026-06-26] Pause-background-media feature (media-key toggle was unreliable: started already-paused songs). Mute-while-recording is the reliable replacement; deleted orphaned media.py.
 
 ### Fixed
 - [2026-06-26] Intermittent freeze/deadlock: record via a blocking read on our own thread instead of a PortAudio callback (eliminates GIL deadlock vs stream close, esp. under Rosetta on Apple Silicon).
