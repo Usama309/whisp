@@ -267,7 +267,8 @@ class WhispApp(rumps.App):
             self._media_paused = False
 
     def _begin_capture(self):
-        self.recorder = Recorder(device=self.settings.get("microphone"))
+        self.recorder = Recorder(device=self.settings.get("microphone"),
+                                 denoise=self.settings.get("noise_reduction", True))
         self.recorder.start()
 
     def _discard_capture(self):
@@ -291,7 +292,8 @@ class WhispApp(rumps.App):
         self._pause_media()
         self._mute_output_async()
         self._cue("start")
-        self.recorder = Recorder(device=self.settings.get("microphone"))
+        self.recorder = Recorder(device=self.settings.get("microphone"),
+                                 denoise=self.settings.get("noise_reduction", True))
         self.recorder.start()
         self._set_state("recording")
 
