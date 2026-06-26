@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 ### Added
+- [2026-06-26] Long-audio support: parallel chunked transcription (any length, 1hr+ works) with Groq RPM pacing + 429 backoff. Verified 1hr in ~72s.
+- [2026-06-26] Production UI overhaul (dark pro-tool): redesigned history (stats, day-grouping, play/copy/expand/flag/delete/search) and settings (premium toggles), shared design system.
+- [2026-06-26] Launch-at-login: LaunchAgent (RunAtLoad + KeepAlive on crash) installed by the .pkg and toggleable from Settings (whisp/autostart.py).
+- [2026-06-26] Transcribe-only guardrail in cleanup: rejects output that "answered" instead of transcribing and falls back to faithful formatting; long transcripts cleaned in blocks. 50/50 scenario test passes.
 - [2026-06-09] Design spec and implementation plan.
 - [2026-06-09] Phase 0 bootstrap: venv, dependencies, package skeleton, governance files.
 - [2026-06-09] Core data layer: config (single source of truth), settings, Apple-epoch time, Willow-schema history store.
@@ -18,4 +22,7 @@
 - [2026-06-09] Archive recordings as WAV instead of opus to drop the ffmpeg bundling dependency.
 
 ### Fixed
+- [2026-06-26] Intermittent freeze/deadlock: record via a blocking read on our own thread instead of a PortAudio callback (eliminates GIL deadlock vs stream close, esp. under Rosetta on Apple Silicon).
+- [2026-06-26] Long recordings failed (>25MB / upload timeout): fixed via chunking + generous per-chunk timeout; bounded all blocking steps so the app can never permanently freeze.
+- [2026-06-26] Groq→local fallback now triggers on any Groq failure (bad key/quota/outage), not just when fully offline; fast connect timeout.
 - [2026-06-09] PyInstaller could not find the `whisp` package (added `--paths .` / `--collect-submodules whisp`).

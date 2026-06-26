@@ -1,15 +1,16 @@
 # Project Scope — Whisp
 
 ## Current State
-Working v1, fully built and committed:
-- Menu-bar dictation app (rumps) with global Fn hold-to-talk hotkey (CGEventTap).
-- Whisper transcription: Groq cloud (whisper-large-v3) primary + bundled local whisper.cpp fallback. Local engine verified end-to-end and proven self-contained on a simulated brew-free Mac.
-- LLM cleanup (Groq llama-3.3-70b) with tone + frontmost-app context; offline regex fallback.
-- Clipboard + Cmd-V paste at cursor; optional Enter; clipboard restored after paste.
-- History stored as one JSON per dictation (Willow-compatible schema); WAV audio archived for replay.
-- Local Flask UI: searchable history (replay/copy/flag/delete) + Settings (Groq key, hotkey, language, model, cleanup, press-Enter).
-- Packaged as `dist/Whisp.dmg` (PyInstaller .app + Applications shortcut). Boots cleanly; UI serves.
-- 30 passing unit/integration tests.
+Production-track v1, built/committed/deployed (distributed via `.pkg` installer that auto-installs Rosetta, removes quarantine, sets up launch-at-login; baked Groq key):
+- Menu-bar dictation app (rumps), Fn hold-to-talk; records via blocking read thread (no PortAudio callback → no GIL deadlock under Rosetta on Apple Silicon).
+- Transcription: Groq cloud whisper-large-v3 primary + bundled local whisper.cpp fallback. **Any-length via parallel chunking** (1hr verified ~72s) with RPM pacing + 429 backoff. Falls back to local on ANY Groq failure; all blocking steps time-bounded (never permanently freezes).
+- Cleanup: Groq llama-3.3-70b with a **transcribe-only guardrail** (never answers/opines; 50/50 tested) + offline regex fallback; long transcripts cleaned in blocks.
+- Mute system audio while recording (default). Clipboard + Cmd-V paste; optional Enter.
+- History (one JSON/dictation, Willow schema) + WAV archive.
+- **Production UI (dark pro-tool)**: history (stats, day-grouping, play/copy/expand/flag/delete/search) + settings (premium toggles, launch-at-login control). Served by local Flask.
+- Launch-at-login via LaunchAgent (RunAtLoad + relaunch on crash).
+- 59 passing tests.
+- Target machine: Apple M1 Pro (app currently x86_64 under Rosetta; native arm64 build is a possible future improvement). Noise handling: user uses macOS Voice Isolation.
 
 ## In Progress
 - Final live test on this Mac (needs Microphone + Accessibility grants and a real spoken dictation).
