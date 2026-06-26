@@ -9,8 +9,9 @@ Production-track v1, built/committed/deployed (distributed via `.pkg` installer 
 - History (one JSON/dictation, Willow schema) + WAV archive.
 - **Production UI (dark pro-tool)**: history (stats, day-grouping, play/copy/expand/flag/delete/search) + settings (premium toggles, launch-at-login control). Served by local Flask.
 - Launch-at-login via LaunchAgent (RunAtLoad + relaunch on crash).
-- 59 passing tests.
-- Target machine: Apple M1 Pro (app currently x86_64 under Rosetta; native arm64 build is a possible future improvement). Noise handling: user uses macOS Voice Isolation.
+- Built-in gentle noise reduction (numpy-only, toggle in Settings) alongside macOS Voice Isolation.
+- 63 passing tests (x86 venv and arm64 venv).
+- Target machine: Apple M1 Pro. App is now a **native arm64 build** (no Rosetta); arm64 whisper.cpp compiled from source. x86 build pipeline retained in dist/ as fallback. Two build scripts: build_app.sh (x86) and build_app_arm64.sh (native).
 
 ## In Progress
 - Final live test on this Mac (needs Microphone + Accessibility grants and a real spoken dictation).

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Added
+- [2026-06-26] Native Apple Silicon (arm64) build: compiled whisper.cpp v1.7.4 from source (CPU+Accelerate), arm64 venv + PyInstaller; new packaging/fetch_assets_arm64.sh + build_app_arm64.sh. App now runs native (no Rosetta). Distributed installer is arm64 (v2.0).
+- [2026-06-26] Built-in gentle noise reduction (high-pass + spectral subtraction, numpy-only) with a Settings toggle; complements macOS Voice Isolation.
 - [2026-06-26] Long-audio support: parallel chunked transcription (any length, 1hr+ works) with Groq RPM pacing + 429 backoff. Verified 1hr in ~72s.
 - [2026-06-26] Production UI overhaul (dark pro-tool): redesigned history (stats, day-grouping, play/copy/expand/flag/delete/search) and settings (premium toggles), shared design system.
 - [2026-06-26] Launch-at-login: LaunchAgent (RunAtLoad + KeepAlive on crash) installed by the .pkg and toggleable from Settings (whisp/autostart.py).
