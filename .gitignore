@@ -12,3 +12,7 @@ Recordings/
 *.dmg
 packaging/assets/
 whisp/_baked_key.py
+build-arm64/
+dist-arm64/
+packaging/assets-arm64/
+.venv-arm64/
