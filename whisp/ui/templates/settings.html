@@ -33,7 +33,7 @@
       <div class="toggle{% if settings.pause_media_while_recording %} on{% endif %}" data-key="pause_media_while_recording" onclick="this.classList.toggle('on')"><b></b></div></div>
     <div class="row"><div class="info"><div class="t">Sound cues</div><div class="d">Subtle start / done chimes.</div></div>
       <div class="toggle{% if settings.sounds_enabled %} on{% endif %}" data-key="sounds_enabled" onclick="this.classList.toggle('on')"><b></b></div></div>
-    <div class="row"><div class="info"><div class="t">Noise reduction</div><div class="d">Removes fan / AC rumble &amp; steady hiss. Gentle; safe with macOS Voice Isolation.</div></div>
+    <div class="row"><div class="info"><div class="t">Noise reduction</div><div class="d">Off by default — cloud transcription already handles noise well, and processing can slightly reduce accuracy. Turn on only for very noisy recordings without macOS Voice Isolation.</div></div>
       <div class="toggle{% if settings.noise_reduction %} on{% endif %}" data-key="noise_reduction" onclick="this.classList.toggle('on')"><b></b></div></div>
   </div>
 
