@@ -54,3 +54,16 @@ def test_clean_uses_local_when_offline(monkeypatch):
                          tones={"work": "Clear."}, dictionary={})
     result = svc.clean("um hello uh there", app_name="Numbers")
     assert "um" not in result.split()
+
+
+def test_looks_like_answer_detects_responses():
+    from whisp.cleanup import looks_like_answer
+    # answered instead of transcribed -> rejected
+    assert looks_like_answer("what is the capital of france", "Paris") is True
+    assert looks_like_answer("what's seventeen times twenty three", "It is 391.") is True
+    assert looks_like_answer("write me an email to my boss",
+                             "Dear boss, I am writing to request time off. Sincerely, ...") is True
+    # faithful transcription -> accepted
+    assert looks_like_answer("what is the capital of france",
+                             "What is the capital of France?") is False
+    assert looks_like_answer("um hello world", "Hello world.") is False
