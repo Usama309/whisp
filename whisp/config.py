@@ -63,7 +63,6 @@ DEFAULT_SETTINGS = {
     "press_enter": False,
     "cleanup_enabled": True,
     "mute_while_recording": True,
-    "pause_media_while_recording": False,
     "noise_reduction": False,   # off: Groq's whisper is already noise-robust; DSP can hurt accuracy
     "sounds_enabled": True,
     "tones": {

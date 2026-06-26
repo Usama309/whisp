@@ -29,8 +29,6 @@
   <div class="panel">
     <div class="row"><div class="info"><div class="t">Mute system audio while recording</div><div class="d">So the mic doesn't pick up what's playing.</div></div>
       <div class="toggle{% if settings.mute_while_recording %} on{% endif %}" data-key="mute_while_recording" onclick="this.classList.toggle('on')"><b></b></div></div>
-    <div class="row"><div class="info"><div class="t">Pause background video/music</div><div class="d">Pause media while recording, resume after.</div></div>
-      <div class="toggle{% if settings.pause_media_while_recording %} on{% endif %}" data-key="pause_media_while_recording" onclick="this.classList.toggle('on')"><b></b></div></div>
     <div class="row"><div class="info"><div class="t">Sound cues</div><div class="d">Subtle start / done chimes.</div></div>
       <div class="toggle{% if settings.sounds_enabled %} on{% endif %}" data-key="sounds_enabled" onclick="this.classList.toggle('on')"><b></b></div></div>
     <div class="row"><div class="info"><div class="t">Noise reduction</div><div class="d">Off by default — cloud transcription already handles noise well, and processing can slightly reduce accuracy. Turn on only for very noisy recordings without macOS Voice Isolation.</div></div>
@@ -72,7 +70,6 @@
       vocabulary_text:document.getElementById('vocabulary_text').value,
       press_enter:tval('press_enter'),
       mute_while_recording:tval('mute_while_recording'),
-      pause_media_while_recording:tval('pause_media_while_recording'),
       sounds_enabled:tval('sounds_enabled'),
       noise_reduction:tval('noise_reduction'),
       cleanup_enabled:tval('cleanup_enabled'),
