@@ -23,6 +23,7 @@ pyinstaller --noconfirm --windowed --name "Whisp" \
   --collect-submodules whisp \
   --hidden-import rumps \
   --collect-all sounddevice \
+  --collect-all soundfile \
   packaging/launcher.py
 
 PLIST="dist/Whisp.app/Contents/Info.plist"

@@ -13,6 +13,7 @@ Willow Voice.
 
 ## Use
 - **Hold the Fn key, speak, release.** The cleaned text is pasted where your cursor is.
+- Open **History**, choose an audio file, and click **Transcribe** to add its cleaned transcript to history. Uploads support WAV, MP3, M4A, FLAC, and OGG files up to 200 MB. Uploaded audio is never pasted into the frontmost app.
 - Menu-bar 🎙️ icon → **History** to search / replay / copy past dictations.
 - Menu-bar 🎙️ icon → **Settings** to change the hotkey, language, and tone.
 

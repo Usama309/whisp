@@ -41,6 +41,21 @@ a{color:var(--accent2);text-decoration:none}
 .recbar b{color:var(--txt)}
 @keyframes p{0%{box-shadow:0 0 0 0 var(--accentglow)}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
 
+/* upload */
+.upload-panel{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px;padding:14px 16px;
+  background:linear-gradient(90deg,rgba(52,211,153,.08),transparent);border:1px solid rgba(52,211,153,.18);border-radius:12px}
+.upload-copy{display:flex;flex-direction:column;gap:3px;flex:1;min-width:250px}
+.upload-copy b{font-size:13px}
+.upload-copy span{font-size:12px;color:var(--txt2);line-height:1.45}
+.upload-controls{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+.upload-controls .act{white-space:nowrap}
+.upload-name{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt3);font-size:12px}
+.upload-btn{padding:8px 14px;font-size:12.5px;white-space:nowrap}
+.upload-btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.upload-status{width:100%;font-size:12px;color:var(--txt2);min-height:0}
+.upload-status.busy{color:var(--accent2)}
+.upload-status.error{color:var(--red)}
+
 /* search */
 .search{position:relative;margin-bottom:22px}
 .search input{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;

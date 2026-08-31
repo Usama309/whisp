@@ -1,4 +1,6 @@
+import os
 import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -12,6 +14,108 @@ from whisp import config
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
+
+
+class AudioDecodeError(ValueError):
+    """Raised when an uploaded file cannot be converted to Whisp's WAV format."""
+
+
+def _write_pcm_wav(path: str, samples, sample_rate: int) -> None:
+    samples = np.asarray(samples, dtype=np.float32).reshape(-1)
+    if not len(samples) or sample_rate <= 0:
+        raise AudioDecodeError("The audio file contains no readable audio.")
+    if sample_rate != SAMPLE_RATE:
+        target_frames = max(1, round(len(samples) * SAMPLE_RATE / sample_rate))
+        source_positions = np.arange(len(samples), dtype=np.float64)
+        target_positions = np.linspace(0, len(samples) - 1, target_frames)
+        samples = np.interp(target_positions, source_positions, samples).astype(np.float32)
+    pcm = np.clip(np.rint(samples), -32768, 32767).astype(np.int16)
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(2)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(pcm.tobytes())
+
+
+def _normalize_with_soundfile(source_path: str, output_path: str) -> None:
+    # soundfile handles WAV, FLAC, OGG, and other libsndfile formats. It is
+    # imported lazily so the app can still report a useful conversion error if
+    # a packaged runtime ever loses this optional decoder.
+    import soundfile as sf
+
+    data, sample_rate = sf.read(
+        source_path, dtype="int16", always_2d=True,
+    )
+    if data.size == 0:
+        raise AudioDecodeError("The audio file contains no readable audio.")
+    mono = data.astype(np.float32).mean(axis=1)
+    _write_pcm_wav(output_path, mono, int(sample_rate))
+
+
+def _normalize_with_afconvert(source_path: str, output_path: str) -> None:
+    # afconvert ships with macOS and covers common compressed formats such as
+    # MP3, M4A, AAC, and AIFF without adding ffmpeg to the distributed app.
+    fd, converted_path = tempfile.mkstemp(suffix=".wav", prefix="whisp_afconvert_")
+    os.close(fd)
+    # afconvert expects to create its destination and may leave an existing
+    # mkstemp placeholder untouched.
+    os.remove(converted_path)
+    try:
+        proc = subprocess.run(
+            ["/usr/bin/afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1",
+             source_path, converted_path],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip()[:160]
+            raise AudioDecodeError(detail or "macOS could not decode this audio file.")
+        # macOS may emit WAVE_FORMAT_EXTENSIBLE here. Read it with libsndfile
+        # and write a plain PCM WAV so Python's duration reader and whisper-cli
+        # see the same format as microphone recordings.
+        _normalize_with_soundfile(converted_path, output_path)
+    except AudioDecodeError:
+        raise
+    except Exception as exc:
+        raise AudioDecodeError("The converted audio file is invalid.") from exc
+    finally:
+        try:
+            os.remove(converted_path)
+        except OSError:
+            pass
+
+
+def normalize_uploaded_audio(source_path: str) -> str:
+    """Convert an uploaded audio file to a temporary 16 kHz mono WAV.
+
+    The caller owns the returned temporary file and must remove it after the
+    transcription job finishes. libsndfile is attempted first for formats it
+    supports; macOS's built-in afconvert handles common compressed formats.
+    """
+    fd, output_path = tempfile.mkstemp(suffix=".wav", prefix="whisp_upload_")
+    os.close(fd)
+    try:
+        try:
+            _normalize_with_soundfile(source_path, output_path)
+        except Exception as soundfile_error:
+            try:
+                _normalize_with_afconvert(source_path, output_path)
+            except Exception as afconvert_error:
+                if isinstance(afconvert_error, AudioDecodeError):
+                    raise AudioDecodeError(
+                        "Whisp could not read this audio file. Try WAV, MP3, M4A, FLAC, or OGG."
+                    ) from soundfile_error
+                raise AudioDecodeError(
+                    "Audio conversion is unavailable on this Mac."
+                ) from afconvert_error
+        return output_path
+    except Exception:
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+        raise
 
 
 def rms_level(wav_path: str) -> float:

@@ -5,6 +5,7 @@
 - [ ] (Optional) Custom app icon
 
 ## Completed
+- [x] History-page audio upload transcription, conversion, no-paste behavior, tests, and native arm64 packaging (2026-08-28)
 - [x] Design spec (2026-06-09)
 - [x] Implementation plan (2026-06-09)
 - [x] Phase 0: Bootstrap (2026-06-09)

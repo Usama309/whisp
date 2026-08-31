@@ -1,5 +1,28 @@
+import os
+import wave
+
 import numpy as np
-from whisp.audio import reduce_noise, Recorder
+from whisp.audio import normalize_uploaded_audio, reduce_noise, Recorder
+
+
+def test_normalize_uploaded_audio_writes_mono_16khz_wav(tmp_path):
+    source = tmp_path / "meeting.wav"
+    frames = (np.arange(8000 * 2, dtype=np.int16) % 800) - 400
+    with wave.open(str(source), "wb") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(8000)
+        wf.writeframes(frames.tobytes())
+
+    normalized = normalize_uploaded_audio(str(source))
+    try:
+        with wave.open(normalized, "rb") as wf:
+            assert wf.getnchannels() == 1
+            assert wf.getsampwidth() == 2
+            assert wf.getframerate() == 16000
+            assert wf.getnframes() == 16000
+    finally:
+        os.remove(normalized)
 
 
 def test_reduce_noise_same_length_and_dtype():

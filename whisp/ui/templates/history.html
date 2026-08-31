@@ -19,6 +19,17 @@
     <span class="kbd">Fn</span>
   </div>
 
+  <form class="upload-panel" id="upload-form" enctype="multipart/form-data">
+    <div class="upload-copy"><b>Transcribe an audio file</b><span>Upload WAV, MP3, M4A, FLAC, or OGG audio up to 200 MB. The transcript will be added to your history.</span></div>
+    <div class="upload-controls">
+      <input id="audio-file" name="audio" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" hidden>
+      <label class="act" for="audio-file">Choose file</label>
+      <span class="upload-name" id="upload-name">No file chosen</span>
+      <button class="btn upload-btn" id="upload-button" type="submit" disabled>Transcribe</button>
+    </div>
+    <div class="upload-status" id="upload-status" aria-live="polite"></div>
+  </form>
+
   <form class="search" method="get" action="/">
     <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
     <input name="q" value="{{ q }}" placeholder="Search your dictations…" autocomplete="off">
@@ -85,5 +96,38 @@
     if(!confirm('Delete this transcript?'))return;
     fetch('/api/transcript/'+id+'/delete',{method:'POST'}).then(()=>location.reload());
   }
+
+  const uploadForm=document.getElementById('upload-form');
+  const uploadFile=document.getElementById('audio-file');
+  const uploadName=document.getElementById('upload-name');
+  const uploadButton=document.getElementById('upload-button');
+  const uploadStatus=document.getElementById('upload-status');
+  uploadFile.addEventListener('change',()=>{
+    const file=uploadFile.files[0];
+    uploadName.textContent=file ? file.name : 'No file chosen';
+    uploadButton.disabled=!file;
+    uploadStatus.textContent='';
+    uploadStatus.className='upload-status';
+  });
+  uploadForm.addEventListener('submit',async(event)=>{
+    event.preventDefault();
+    const file=uploadFile.files[0];
+    if(!file)return;
+    uploadButton.disabled=true;
+    uploadStatus.className='upload-status busy';
+    uploadStatus.textContent='Uploading and transcribing…';
+    const data=new FormData(); data.append('audio',file);
+    try{
+      const response=await fetch('/api/upload',{method:'POST',body:data});
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(body.error||'Upload failed.');
+      uploadStatus.textContent='Transcript added. Refreshing…';
+      location.reload();
+    }catch(error){
+      uploadStatus.className='upload-status error';
+      uploadStatus.textContent=error.message;
+      uploadButton.disabled=false;
+    }
+  });
 </script>
 </body></html>

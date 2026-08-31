@@ -35,6 +35,15 @@ GROQ_CHAT_URL = f"{GROQ_BASE}/chat/completions"
 GROQ_STT_MODEL = "whisper-large-v3"
 GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
 
+# Browser uploads are decoded locally before they enter the same transcription
+# pipeline as microphone recordings. Keep the limit high enough for long calls
+# while preventing an accidental oversized request from consuming the app's
+# memory and disk indefinitely.
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+UPLOAD_EXTENSIONS = frozenset({
+    ".aac", ".aiff", ".flac", ".m4a", ".mp3", ".mp4", ".ogg", ".wav", ".webm",
+})
+
 # Default hotkey: the Fn key. Hold to dictate, double-tap to lock (hands-free),
 # single-tap while locked to unlock. (Combo mode with Left Shift + Left Control
 # remains available by setting mode="combo".)

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- [2026-08-28] History-page audio upload transcription: accepts up to 200 MB of supported audio, normalizes it to 16 kHz mono WAV, uses the existing Groq/local fallback and cleanup pipeline, saves the transcript/audio to history, and never pastes upload results into the frontmost app. Added upload UI, endpoint coverage, conversion coverage, and bundled soundfile support.
 - [2026-06-26] Native Apple Silicon (arm64) build: compiled whisper.cpp v1.7.4 from source (CPU+Accelerate), arm64 venv + PyInstaller; new packaging/fetch_assets_arm64.sh + build_app_arm64.sh. App now runs native (no Rosetta). Distributed installer is arm64 (v2.0).
 - [2026-06-26] Built-in gentle noise reduction (high-pass + spectral subtraction, numpy-only) with a Settings toggle; complements macOS Voice Isolation.
 - [2026-06-26] Long-audio support: parallel chunked transcription (any length, 1hr+ works) with Groq RPM pacing + 429 backoff. Verified 1hr in ~72s.
