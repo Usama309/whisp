@@ -16,3 +16,6 @@ build-arm64/
 dist-arm64/
 packaging/assets-arm64/
 .venv-arm64/
+
+# macOS custom-folder-icon stubs ("Icon" + CR; ? matches the CR)
+Icon?
