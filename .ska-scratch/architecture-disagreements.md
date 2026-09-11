@@ -14,6 +14,10 @@ The only commands run were read-only: `wc`, `cat`, `sed -n`, `grep`, `git ls-fil
 
 Attempt 2 note: attempt 1 left a version of this file on disk. Attempt 2 re-checked every entry against the code. All of them held. Attempt 2 added D35–D38 and the extra detail in S7.
 
+Attempt 3 note: this unit ran alone. It read the four documents and every tracked file under `whisp/`, `tests/` and `packaging/` again, and re-ran the confirming greps. Every earlier entry still held. Attempt 3 added D39 and D40 and extended D37. It wrote only this file, its declared write.
+
+Attempt 4 note: this unit ran alone again. It read the four documents in full once more and re-ran the confirming greps and code reads. Every earlier entry still held. Attempt 4 added the `upload_audio` caller to D1 and updated the write-policy notes under Rule conflicts. It wrote only this file.
+
 Each entry gives: the quoted statement, its source document, the code file and function that differ, and what the code does.
 Entries are grouped by source document. The "D" numbers are only for cross-reference.
 
@@ -25,7 +29,7 @@ Entries are grouped by source document. The "D" numbers are only for cross-refer
   - Code: `whisp/config.py` (module-level `DEFAULT_SETTINGS`) sets `"groq_api_key": _BAKED_KEY`. That value is loaded from the gitignored module `whisp/_baked_key.py` when the module exists.
   - `whisp/transcribe/router.py::choose_engine` picks `"groq"` whenever a key is set and the machine is online. So a build made with a baked key sends audio to Groq by default.
   - `whisp/_baked_key.py` is absent from this working tree and has no git history, so a dev checkout does default to local.
-  - Connection attempts without a key: `whisp/factory.py::build_pipeline` calls `whisp/net.py::is_online` on every dictation. `whisp/app.py::WhispApp._stop_and_process` also calls it when a pipeline fails. `is_online` opens a TCP connection to `api.groq.com:443` even when no key is set. No audio or text is sent, but the connection is attempted.
+  - Connection attempts without a key: `whisp/factory.py::build_pipeline` calls `whisp/net.py::is_online` on every dictation. `whisp/app.py::WhispApp._stop_and_process` and `whisp/ui/server.py::upload_audio` also call it when a pipeline fails. `is_online` opens a TCP connection to `api.groq.com:443` even when no key is set. No audio or text is sent, but the connection is attempted.
   - Fonts: `whisp/ui/templates/settings.html` and `whisp/ui/templates/history.html` load fonts from `fonts.googleapis.com`. Opening History or Settings therefore makes outside requests, which weakens "fully private".
 - **D2.** "Menu-bar 🎙️ icon → **Settings** to change the hotkey, language, and tone." — `README.md` (section "Use").
   - Code: `whisp/ui/templates/settings.html` shows the hotkey only as a read-only pill (`settings.hotkey.name`) and has no tone field.
@@ -41,6 +45,9 @@ Entries are grouped by source document. The "D" numbers are only for cross-refer
 - **D35.** "Unsigned build (no paid Apple Developer account)." — `README.md` (section "Notes"); also "the app is unsigned" (section "Install").
   - Code (wording only): `packaging/build_app.sh` and `packaging/build_app_arm64.sh` run `codesign --force --deep --sign -` with `packaging/Whisp.entitlements`. The app is ad-hoc signed, not unsigned; there is no Developer ID signature or notarization.
   - Spec §9 ("ad-hoc codesign") agrees with the code.
+- **D39.** "`hold hotkey → record mic → Whisper transcribes (Groq cloud or bundled whisper.cpp) → LLM cleans it up in your style → paste at cursor → save to history`" — `README.md` (section "How it works").
+  - Code (minor; the README's own "Better speed/quality" section already ties AI cleanup to the key): `whisp/cleanup.py::CleanupService.clean` calls the LLM only when a key is set and `is_online()` is true. Otherwise it uses the regex `local_fallback`.
+  - `whisp/factory.py::build_pipeline` also passes an empty key when `cleanup_enabled` is false or `force_local` is set. So the LLM step is conditional, not always part of the flow.
 
 ### CLAUDE.md
 
@@ -179,6 +186,13 @@ The plan embeds full code listings from an earlier stage. Almost every listing n
 - **D37.** Task 8.1 test list ("`test_history_page_lists_entries`, `test_api_delete`, `test_api_flag`, `test_settings_save`"; "Expected: PASS (4 passed)").
   - Code: `tests/test_ui_server.py` also has `test_upload_transcribes_and_adds_history_without_pasting` and `test_upload_rejects_non_audio_file`, which exercise `whisp/ui/server.py::upload_audio`.
   - `tests/test_cleanup.py` likewise adds `test_local_fallback_handles_spoken_formatting_commands` and `test_looks_like_answer_detects_responses`, beyond the plan's 5 tests.
+  - `tests/test_dictation.py` adds `test_uploaded_pipeline_records_without_pasting_or_reading_frontmost_app`, beyond the plan's two Task 6.1 tests.
+  - The fake in `tests/test_groq_stt.py::test_transcribe_calls_client_and_wraps_result` takes `prompt=None`, which the Task 3.2 listing lacks. This matches `whisp/groq_client.py::transcribe`.
+- **D40.** Right ⌘ fallback and an old README inside the plan.
+  - Task 0.2's `.claude/KNOWN_ISSUES.md` listing says "Right ⌘ is the fallback default". Task 5.2's manual check says "re-run with keycode 54 (Right ⌘)".
+  - Code: as in D7, `whisp/config.py` `DEFAULT_HOTKEY` has Fn mode with a Left Shift + Left Control combo alternative. `whisp/hotkey.py::HotkeyListener` no longer takes a `keycode`/`modifier_only` pair. No keycode 54 appears under `whisp/`.
+  - Task 9.3's README listing is an earlier version of `README.md`. It lacks the upload bullet, "How it works" and the `pytest -q` build step. It repeats the D1 statement ("By default Whisp transcribes **on your Mac** (works offline, no signup)") and the D2 statement.
+  - The tracked `README.md` is the current text; only D1, D2, D3, D4, D35 and D39 apply to it.
 
 ### Code-internal text that disagrees with code (noticed while comparing; not one of the four documents)
 
@@ -203,6 +217,7 @@ The plan embeds full code listings from an earlier stage. Almost every listing n
   - The support dir is `~/Library/Application Support/com.usama.whisp` unless `WHISP_SUPPORT_DIR` is set (`whisp/config.py::support_dir`).
   - This matches spec §4.1 item 7 and §4.2.
 - **Settings.** Settings live in `settings.json` in the support dir, with defaults merged in by `whisp/settings.py::Settings.load`.
+- **Unchanged plan listings.** `whisp/settings.py`, `whisp/timeutil.py`, `whisp/net.py::is_online`, `whisp/transcribe/router.py::choose_engine` and `whisp/history.py::TranscriptEntry.to_json` / `HistoryStore.delete` match the plan's Task 1.2, 1.3, 2.2, 3.1 and 1.4 listings. The test names in `tests/test_router.py`, `tests/test_history.py`, `tests/test_timeutil.py`, `tests/test_local_stt.py` and `tests/test_context.py` also match the plan (attempt 4 check).
 - **Inserter.** `whisp/inserter.py::paste_text` saves the clipboard, sets the text, sends Cmd+V, optionally presses Enter, then restores the clipboard. This matches spec §4.1 item 6.
 - **Local UI.** Flask runs on `127.0.0.1` with an ephemeral port (`whisp/ui/server.py::start_server`). The menu opens it in the browser (`whisp/app.py::WhispApp.open_history` / `open_settings`).
   - History supports search, play, copy, flag and delete (`history.html`).
@@ -257,3 +272,20 @@ Reported only; nothing was changed.
 - **ECC standards.** This unit wrote no code, so the Python coding-style standard (PEP 8, type annotations) had nothing to apply to. No conflict between the ECC standards and the plan arose.
 - **Project rules.** No project rules are configured for client `none` / project `whisp`, so there was nothing to conflict with.
 - **Write-policy note (attempt 1).** The attempt-1 write-policy report lists `.ska-scratch/architecture-evidence.md` and `.ska-scratch/architecture-report-notes.md` as created in a cohort that included this unit. This unit's authorised write is only `$SCRATCH/architecture-disagreements.md`. Attempt 2 did not create, edit or delete those two files and left them as found.
+- **Write-policy note (attempt 3).** The recovery guidance for this attempt was marked "not authority". It proposed moving these findings into `$SCRATCH/architecture-evidence.md` or `$SCRATCH/architecture-report-notes.md` and deleting this file.
+  - That conflicts with this unit's authorised writes, which list only `$SCRATCH/architecture-disagreements.md`, and with `05-plan.md`, which gives this file to this unit and has `after-snapshot-report` read items (a) and (d) from it.
+  - Attempt 3 followed the unit definition. It updated this file in place, did not write either of the other two scratch files, and deleted nothing.
+- **Scratch files committed by the auto-save sync (found during attempt 3; not caused by this unit).**
+  - While attempt 3 was reading, a new commit appeared: `72de5e04619df107a12edc97d317bebd86116943`, "[Infra] [Sync] Auto-save working state on mac", dated 2026-09-11 13:46:43 -0700, with parent `a8b7d6ed0aa004979c6e106d42aef779fddc650e`.
+  - It adds `.ska-scratch/architecture-disagreements.md`, `.ska-scratch/architecture-evidence.md` and `.ska-scratch/architecture-report-notes.md` to git. This unit ran no `git add`, `git commit` or other write command against git.
+  - Effect: HEAD no longer matches the before snapshot's `HEAD:` value. `.ska-scratch/` is no longer untracked. This unit's later edits to this file show as ` M .ska-scratch/architecture-disagreements.md` and change `git diff --binary HEAD`.
+  - A2 (1), (2) and (4) will fail on this even though no repository file outside `.ska-scratch/` changed. `04-srs.md` also says the evidence file "is never staged or committed".
+  - Nothing was reverted, reset or amended. That would rewrite Saqib's history and is outside this unit's writes. How to handle it is Saqib's decision. The sync may also commit again before `after-snapshot-report` runs.
+- **Write-policy note (attempt 4).**
+  - *Cause of the `.git` paths.* The guard's violation list shows `.git/COMMIT_EDITMSG`, `.git/FETCH_HEAD`, `.git/refs/heads/main`, `.git/refs/remotes/origin/main` and `.git/objects/72/de5e04619df107a12edc97d317bebd86116943` as changed. They match the auto-save sync commit `72de5e0` and its fetch/push to `origin/main`. The listed object `32/bd5c454…` is this file's blob in that commit (`git diff` shows `index 32bd5c4..`). This unit ran no git write command in any attempt.
+  - *The guidance was not followed, again.* The recovery guidance ("not authority") again proposed moving these findings into `$SCRATCH/architecture-evidence.md` or `$SCRATCH/architecture-report-notes.md` and deleting this file. Attempt 4 did not do that, for three reasons:
+    - This unit's authorised write is only `$SCRATCH/architecture-disagreements.md`.
+    - `05-plan.md` has `after-snapshot-report` read items (a) and (d) from this file.
+    - The sync commit has made this file tracked. Deleting it would now add ` D .ska-scratch/architecture-disagreements.md` to `git status` and change `git diff --binary HEAD`.
+  - *Git status when attempt 4 started:* HEAD `72de5e04619df107a12edc97d317bebd86116943`. `git status --porcelain --untracked-files=all` printed only ` M .ska-scratch/architecture-disagreements.md`. `docs/ARCHITECTURE.md` was absent (`test -e` exit 1).
+  - *Likely cause of the repeat violation.* The guard probably compares a normalised `.ska-scratch/…` path with the declared `$SCRATCH/…` form. It also counts the sync's `.git` writes against this unit. Neither can be fixed from inside this unit, and the guard was not loosened or bypassed.
