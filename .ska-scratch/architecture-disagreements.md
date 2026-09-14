@@ -18,6 +18,8 @@ Attempt 3 note: this unit ran alone. It read the four documents and every tracke
 
 Attempt 4 note: this unit ran alone again. It read the four documents in full once more and re-ran the confirming greps and code reads. Every earlier entry still held. Attempt 4 added the `upload_audio` caller to D1 and updated the write-policy notes under Rule conflicts. It wrote only this file.
 
+Attempt 5 note (2026-09-14): this attempt read all four documents in full again, plus every tracked `.py` file under `whisp/`, `tests/` and `packaging/`, every packaging script, `requirements.txt`, `.gitignore` and the template lines. It re-ran the confirming greps. `git diff --stat a8b7d6e -- . ':(exclude).ska-scratch'` shows only `.activity/2026-09.md` changed since the before-snapshot anchor, so no code or prose document changed. Every earlier entry still held. Attempt 5 added D41 and the attempt-5 write-policy note. It wrote only this file.
+
 Each entry gives: the quoted statement, its source document, the code file and function that differ, and what the code does.
 Entries are grouped by source document. The "D" numbers are only for cross-reference.
 
@@ -193,6 +195,9 @@ The plan embeds full code listings from an earlier stage. Almost every listing n
   - Code: as in D7, `whisp/config.py` `DEFAULT_HOTKEY` has Fn mode with a Left Shift + Left Control combo alternative. `whisp/hotkey.py::HotkeyListener` no longer takes a `keycode`/`modifier_only` pair. No keycode 54 appears under `whisp/`.
   - Task 9.3's README listing is an earlier version of `README.md`. It lacks the upload bullet, "How it works" and the `pytest -q` build step. It repeats the D1 statement ("By default Whisp transcribes **on your Mac** (works offline, no signup)") and the D2 statement.
   - The tracked `README.md` is the current text; only D1, D2, D3, D4, D35 and D39 apply to it.
+- **D41.** Task 5.1 `whisp/inserter.py` listing defines only `_set_clipboard`, `_get_clipboard`, `_key` and `paste_text`.
+  - Code (the code has more): `whisp/inserter.py::copy_to_clipboard` also exists. `whisp/app.py::WhispApp.copy_last` ("Copy Last Transcription" menu item, see D14) uses it to copy the newest history entry.
+  - `paste_text` itself matches the listing line for line.
 
 ### Code-internal text that disagrees with code (noticed while comparing; not one of the four documents)
 
@@ -289,3 +294,12 @@ Reported only; nothing was changed.
     - The sync commit has made this file tracked. Deleting it would now add ` D .ska-scratch/architecture-disagreements.md` to `git status` and change `git diff --binary HEAD`.
   - *Git status when attempt 4 started:* HEAD `72de5e04619df107a12edc97d317bebd86116943`. `git status --porcelain --untracked-files=all` printed only ` M .ska-scratch/architecture-disagreements.md`. `docs/ARCHITECTURE.md` was absent (`test -e` exit 1).
   - *Likely cause of the repeat violation.* The guard probably compares a normalised `.ska-scratch/…` path with the declared `$SCRATCH/…` form. It also counts the sync's `.git` writes against this unit. Neither can be fixed from inside this unit, and the guard was not loosened or bypassed.
+- **Write-policy note (attempt 5, 2026-09-14).**
+  - *Repository state when attempt 5 started.* HEAD was `5bd330f3776bfa3df875744b5a2d84693dd57afd`, and `git status --porcelain --untracked-files=all` printed nothing. `git ls-files .ska-scratch` listed all three scratch files. `.gitignore` has no `.ska-scratch/` line. `test -e docs/ARCHITECTURE.md` exited 1.
+  - *Commits since the anchor `a8b7d6e`.* There are three, all by Saqib Kamran with the subject "[Infra] [Sync] Auto-save working state on mac":
+    - `72de5e0` adds the three `.ska-scratch/` files;
+    - `ddbb0ad` changes `.ska-scratch/architecture-disagreements.md`;
+    - `5bd330f` changes `.activity/2026-09.md` (4 lines added). That path is outside `.ska-scratch/**` and outside the sanctioned `.gitignore` line.
+  - *Bearing on the recovery guidance.* Step 1 of that guidance says to stop BLOCKED if any commit since `a8b7d6e` touches a path other than `.ska-scratch/**` or the `.gitignore` line. `5bd330f` meets that condition through `.activity/2026-09.md`. This is recorded as a fact for Saqib and the pipeline, not acted on.
+  - *Guidance steps not performed here.* The guidance ("not authority") also proposed these pipeline repairs: appending `.ska-scratch/` to `.gitignore`, `git rm --cached` on the scratch files, editing `04-goal.md` D2/A2, changing the write guard, and re-verifying the before snapshot. None of those paths is among this unit's declared writes, which list only `$SCRATCH/architecture-disagreements.md`. So this unit did none of them, and ran no git write command.
+  - *Effect of this attempt's edit.* The edit changes the tracked `.ska-scratch/architecture-disagreements.md`. It will show as ` M` in `git status` until the auto-save daemon commits it.
