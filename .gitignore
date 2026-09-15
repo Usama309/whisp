@@ -19,3 +19,9 @@ packaging/assets-arm64/
 
 # macOS custom-folder-icon stubs ("Icon" + CR; ? matches the CR)
 Icon?
+
+# SKA pipeline scratch and the per-repo activity log. Neither belongs in the repo:
+# milo-stone/.gitignore:17,23 and sk-assistant/.gitignore:13 already carry both, and
+# milo-stone's own comment records that .activity/ leaked a secret from that repo once.
+.ska-scratch/
+.activity/
